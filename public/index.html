@@ -27,7 +27,7 @@
       body { margin: 0; min-height: 100vh; background: var(--bg); }
       .shell { min-height: 100vh; display: grid; grid-template-columns: minmax(300px, 372px) 1fr; }
       aside { border-right: 1px solid var(--line); padding: 22px; background: linear-gradient(180deg, #111816 0%, #0b1111 100%); display: flex; flex-direction: column; gap: 18px; max-height: 100vh; overflow: auto; }
-      main { padding: 24px; display: grid; grid-template-rows: auto 1fr auto; gap: 16px; max-height: 100vh; background: linear-gradient(180deg, #0a0d0e 0%, #0d1111 100%); }
+      main { padding: 24px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 16px; max-height: 100vh; background: linear-gradient(180deg, #0a0d0e 0%, #0d1111 100%); }
       h1 { margin: 0; font-size: 24px; letter-spacing: 0; line-height: 1.08; }
       p { color: var(--muted); line-height: 1.5; }
       .brand { display: grid; gap: 12px; }
@@ -106,11 +106,40 @@
       .kv dd { margin: 0; overflow-wrap: anywhere; }
       .skills { padding: 12px 13px; display: flex; flex-wrap: wrap; gap: 7px; }
       .skill-chip { border: 1px solid rgba(116,213,247,.22); border-radius: 999px; padding: 6px 8px; color: rgba(238,246,240,.82); background: rgba(116,213,247,.07); font-size: 11px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+      .portfolio { border: 1px solid var(--line); border-radius: 8px; background: rgba(255,255,255,.025); overflow: hidden; }
+      .portfolio-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+      .portfolio-title { display: grid; gap: 2px; }
+      .portfolio-title strong { font-size: 13px; text-transform: uppercase; letter-spacing: .08em; }
+      .portfolio-title span { color: var(--faint); font-size: 12px; }
+      .portfolio-refresh { min-height: 34px; padding: 0 11px; color: var(--green-ink); background: var(--green); border: 0; font-size: 12px; font-weight: 900; }
+      .portfolio-grid { display: grid; grid-template-columns: repeat(5, minmax(84px, 1fr)); border-bottom: 1px solid var(--line); }
+      .bucket { padding: 11px 12px; border-right: 1px solid rgba(238,246,240,.08); }
+      .bucket:last-child { border-right: 0; }
+      .bucket span { display: block; color: var(--faint); font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+      .bucket strong { display: block; margin-top: 4px; font-size: 20px; line-height: 1; }
+      .portfolio-body { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 0; }
+      .portfolio-col { min-width: 0; padding: 13px; display: grid; align-content: start; gap: 9px; }
+      .portfolio-col:first-child { border-right: 1px solid rgba(238,246,240,.08); }
+      .col-label { color: var(--faint); font-size: 11px; font-weight: 900; text-transform: uppercase; letter-spacing: .08em; }
+      .portfolio-row { border: 1px solid rgba(238,246,240,.10); border-radius: 8px; padding: 10px; background: rgba(255,255,255,.025); display: grid; gap: 7px; }
+      .row-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+      .token-name { color: var(--text); font-size: 13px; font-weight: 900; overflow-wrap: anywhere; }
+      .token-meta { margin-top: 2px; color: var(--faint); font-size: 11px; overflow-wrap: anywhere; }
+      .decision { border-radius: 999px; padding: 5px 8px; font-size: 10px; font-weight: 900; text-transform: uppercase; white-space: nowrap; color: #07140d; background: var(--green); }
+      .decision.sell, .decision.avoid { background: #ff9b8f; }
+      .decision.trim { background: var(--amber); }
+      .decision.watch { color: var(--text); background: rgba(116,213,247,.18); border: 1px solid rgba(116,213,247,.28); }
+      .row-stats { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; }
+      .row-reason { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.35; }
+      .empty-state { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.45; }
       @media (max-width: 820px) {
         .shell { grid-template-columns: 1fr; }
         aside { border-right: 0; border-bottom: 1px solid rgba(237,247,239,.12); max-height: none; }
         main { max-height: none; min-height: 70vh; }
         .composer { grid-template-columns: 1fr; }
+        .portfolio-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .portfolio-body { grid-template-columns: 1fr; }
+        .portfolio-col:first-child { border-right: 0; border-bottom: 1px solid rgba(238,246,240,.08); }
       }
     </style>
   </head>
@@ -157,7 +186,7 @@
             <div class="group-label">Strategy setup</div>
             <button class="action-btn" data-prompt="Show me how Nuvolari add liquidity works and what inputs you need from me."><span class="action-icon">LP</span><span><span class="action-title">LP setup</span><span class="action-desc">List pool, range, fee, and wallet requirements.</span></span></button>
             <button class="action-btn" data-prompt="Run the AImeme autonomous memecoin scan across any chain. Use the workflow, free gates, and show paid AgentCash/Nansen next steps."><span class="action-icon">AI</span><span><span class="action-title">AImeme scan</span><span class="action-desc">Run discovery gates and next-step signals.</span></span></button>
-            <button class="action-btn" data-prompt="Show me the AImeme workflow, subagent coordinator lanes, and which executable API tools are wired for Vercel."><span class="action-icon">WF</span><span><span class="action-title">AImeme wiring</span><span class="action-desc">Inspect agent lanes and executable API tools.</span></span></button>
+            <button class="action-btn" data-prompt="Run the AImeme autonomous memecoin scan across any chain, then explain the subagent coordinator lanes and executable API tools used."><span class="action-icon">WF</span><span><span class="action-title">AImeme wiring</span><span class="action-desc">Run lanes and inspect executable API tools.</span></span></button>
           </div>
           <div class="action-group">
             <div class="group-label">Reference</div>
@@ -170,6 +199,26 @@
           <h1>Command Center</h1>
           <p id="subtitle">Model: deepseek/deepseek-v4-flash via OpenRouter</p>
         </div>
+        <section class="portfolio" aria-label="AImeme portfolio">
+          <div class="portfolio-head">
+            <div class="portfolio-title">
+              <strong>AImeme Portfolio</strong>
+              <span id="portfolioSource">Tracked tokens now. Wallet import when configured.</span>
+            </div>
+            <button class="portfolio-refresh" type="button" id="portfolioRefresh">Refresh</button>
+          </div>
+          <div class="portfolio-grid" id="portfolioBuckets"></div>
+          <div class="portfolio-body">
+            <div class="portfolio-col">
+              <div class="col-label">Positions</div>
+              <div id="portfolioPositions"></div>
+            </div>
+            <div class="portfolio-col">
+              <div class="col-label">Watchlist</div>
+              <div id="portfolioWatchlist"></div>
+            </div>
+          </div>
+        </section>
         <section class="messages" id="messages"></section>
         <form class="composer" id="form">
           <textarea id="input" placeholder="Example: quote swapping 250 USDC into ETH on Base, then show the route provider."></textarea>
@@ -185,6 +234,11 @@
       const statusEl = document.getElementById("status");
       const skillsEl = document.getElementById("skills");
       const subtitle = document.getElementById("subtitle");
+      const portfolioSourceEl = document.getElementById("portfolioSource");
+      const portfolioBucketsEl = document.getElementById("portfolioBuckets");
+      const portfolioPositionsEl = document.getElementById("portfolioPositions");
+      const portfolioWatchlistEl = document.getElementById("portfolioWatchlist");
+      const portfolioRefreshEl = document.getElementById("portfolioRefresh");
       const history = [];
 
       function inlineMd(text) {
@@ -305,6 +359,76 @@
         return `<div class="trace-list">${cards}</div>`;
       }
 
+      function fmtMoney(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n) || n <= 0) return "n/a";
+        if (n >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
+        if (n >= 1000) return `$${(n / 1000).toFixed(1)}K`;
+        return `$${n.toFixed(2)}`;
+      }
+
+      function fmtPct(value) {
+        const n = Number(value);
+        if (!Number.isFinite(n)) return "n/a";
+        return `${n > 0 ? "+" : ""}${n.toFixed(1)}%`;
+      }
+
+      function portfolioRow(row, fallbackName) {
+        const bucket = row.bucket || "watch";
+        const action = row.action || "WATCH";
+        const name = row.symbol || row.name || fallbackName || "Token";
+        const chain = row.chain || row.network || "any chain";
+        const address = row.address || row.tokenAddress || "";
+        const reason = row.reason || row.marketReason || row.safetyReason || "Waiting for stronger signal.";
+        return `<article class="portfolio-row">
+          <div class="row-top">
+            <div>
+              <div class="token-name">${escapeHtml(name)}</div>
+              <div class="token-meta">${escapeHtml(chain)} ${address ? "· " + escapeHtml(String(address).slice(0, 8)) + "..." : ""}</div>
+            </div>
+            <span class="decision ${escapeHtml(bucket)}">${escapeHtml(action)}</span>
+          </div>
+          <div class="row-stats">
+            <span>Price ${escapeHtml(row.priceUsd || "n/a")}</span>
+            <span>Liquidity ${fmtMoney(row.liquidityUsd)}</span>
+            ${row.pnlPct === undefined || row.pnlPct === null ? "" : `<span>PnL ${fmtPct(row.pnlPct)}</span>`}
+            ${row.positionUsd === undefined || row.positionUsd === null ? "" : `<span>Size ${fmtMoney(row.positionUsd)}</span>`}
+          </div>
+          <p class="row-reason">${escapeHtml(reason)}</p>
+        </article>`;
+      }
+
+      async function loadPortfolio() {
+        portfolioBucketsEl.innerHTML = `<div class="bucket"><span>Loading</span><strong>...</strong></div>`;
+        try {
+          const res = await fetch("/api/portfolio?scan=1&max_candidates=3");
+          const p = await res.json();
+          const buckets = p.buckets || {};
+          portfolioSourceEl.textContent = p.wallet && p.wallet.configured
+            ? `Wallet set: ${p.wallet.address}. Wallet fetch adapter pending.`
+            : "Tracked tokens now. Wallet import when configured.";
+          portfolioBucketsEl.innerHTML = [
+            ["watch", "Watch"],
+            ["buy_watch", "Buy review"],
+            ["trim", "Trim"],
+            ["sell", "Sell"],
+            ["avoid", "Avoid"],
+          ].map(([key, label]) => `<div class="bucket"><span>${label}</span><strong>${Number(buckets[key] || 0)}</strong></div>`).join("");
+          const positions = p.positions || [];
+          const watchlist = p.watchlist || [];
+          portfolioPositionsEl.innerHTML = positions.length
+            ? positions.map(row => portfolioRow(row, "Position")).join("")
+            : `<p class="empty-state">No tracked positions yet. Add AIMEME_TRACKED_TOKENS now, or provide the wallet later for wallet-backed holdings.</p>`;
+          portfolioWatchlistEl.innerHTML = watchlist.length
+            ? watchlist.map(row => portfolioRow(row, "Candidate")).join("")
+            : `<p class="empty-state">No live watchlist candidates returned from the scan.</p>`;
+        } catch (err) {
+          portfolioBucketsEl.innerHTML = "";
+          portfolioPositionsEl.innerHTML = `<p class="empty-state">Portfolio failed: ${escapeHtml(err.message)}</p>`;
+          portfolioWatchlistEl.innerHTML = "";
+        }
+      }
+
       async function loadHealth() {
         const res = await fetch("/api/health");
         const h = await res.json();
@@ -364,6 +488,8 @@
       });
       addMessage("assistant", "Ready. Ask for a Nuvolari swap, buy, yield route, or LP action.");
       loadHealth();
+      loadPortfolio();
+      portfolioRefreshEl.addEventListener("click", loadPortfolio);
     </script>
   </body>
 </html>
