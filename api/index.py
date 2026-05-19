@@ -764,6 +764,22 @@ def _nuvolari_error_reply(name: str, result: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def _needs_input_reply(name: str, result: Dict[str, Any]) -> str:
+    needed = result.get("needs_input") or []
+    lines = [
+        f"`{name}` is ready, but I need more input before calling Nuvolari.",
+        "",
+        result.get("message", "Required inputs are missing."),
+    ]
+    if needed:
+        lines.extend(["", "Required inputs:", json.dumps(needed, indent=2)])
+    if result.get("received"):
+        lines.extend(["", "Prepared fields so far:", json.dumps(result["received"], indent=2)])
+    if result.get("docs_source"):
+        lines.extend(["", "API reference:", result["docs_source"]])
+    return "\n".join(lines)
+
+
 def chat_response(payload: Dict[str, Any]) -> Dict[str, Any]:
     message = str(payload.get("message") or "").strip()
     if not message:
@@ -807,6 +823,13 @@ def chat_response(payload: Dict[str, Any]) -> Dict[str, Any]:
             if isinstance(result, dict) and result.get("needs_configuration"):
                 return {
                     "reply": _configuration_reply(result),
+                    "tool_trace": tool_trace,
+                    "health": health(),
+                    "timestamp": int(time.time()),
+                }
+            if isinstance(result, dict) and result.get("needs_input"):
+                return {
+                    "reply": _needs_input_reply(name, result),
                     "tool_trace": tool_trace,
                     "health": health(),
                     "timestamp": int(time.time()),
