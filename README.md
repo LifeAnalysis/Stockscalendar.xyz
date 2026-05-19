@@ -9,6 +9,7 @@ This repo is intentionally small. It keeps only the serverless API, browser comm
 - Routes chat requests through OpenRouter with tool calls handled in `api/index.py`.
 - Calls Nuvolari read/quote endpoints for yields, swaps, buys, execution quotes, and signed execution submission.
 - Runs AImeme discovery across GeckoTerminal/CoinGecko, DexScreener, Rugcheck, and GoPlus.
+- Shows an AImeme portfolio view for watch, buy-review, trim, and sell decisions.
 - Generates AgentCash/Nansen paid-enrichment commands without spending x402 funds from Vercel.
 - Exposes `/api/cron/aimeme` for compact scheduled decisions and optional webhook delivery.
 - Serves a simple browser command center from `public/index.html`.
@@ -43,6 +44,7 @@ NUVOLARI_SECRET_API_KEY=...
 
 COINGECKO_API_KEY=
 AIMEME_TRACKED_TOKENS='[{"symbol":"TOKEN","chain":"base","address":"0x...","entry_price":"0.001"}]'
+AIMEME_PORTFOLIO_WALLET=
 AIMEME_DECISION_WEBHOOK_URL=
 AIMEME_CRON_SECRET=
 ```
@@ -52,6 +54,7 @@ AIMEME_CRON_SECRET=
 - `GET /` serves the command center.
 - `GET /api/health` reports configured keys, Nuvolari path readiness, model, and AImeme knowledge status.
 - `POST /api/chat` sends a user message through OpenRouter and executes approved local tools.
+- `GET /api/portfolio?scan=1&max_candidates=3` returns wallet status, tracked positions, watchlist candidates, and watch/buy/trim/sell buckets.
 - `GET /api/cron/aimeme?max_candidates=6&chain=base` runs a compact AImeme scan cycle.
 - `GET /api/context7?q=...` fetches Nuvolari Context7 docs text.
 - `GET /api/docs/<topic>?ask=...` proxies Nuvolari docs lookup topics such as `swap`, `yield`, `liquidity`, `agents`, and `insights`.
