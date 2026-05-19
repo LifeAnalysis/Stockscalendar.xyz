@@ -27,7 +27,7 @@
       body { margin: 0; min-height: 100vh; background: var(--bg); }
       .shell { min-height: 100vh; display: grid; grid-template-columns: minmax(300px, 372px) 1fr; }
       aside { border-right: 1px solid var(--line); padding: 22px; background: linear-gradient(180deg, #111816 0%, #0b1111 100%); display: flex; flex-direction: column; gap: 18px; max-height: 100vh; overflow: auto; }
-      main { padding: 24px; display: grid; grid-template-rows: auto auto 1fr auto; gap: 16px; max-height: 100vh; background: linear-gradient(180deg, #0a0d0e 0%, #0d1111 100%); }
+      main { padding: 24px; display: grid; grid-template-rows: auto 1fr auto; gap: 16px; max-height: 100vh; background: linear-gradient(180deg, #0a0d0e 0%, #0d1111 100%); }
       h1 { margin: 0; font-size: 24px; letter-spacing: 0; line-height: 1.08; }
       p { color: var(--muted); line-height: 1.5; }
       .brand { display: grid; gap: 12px; }
@@ -132,6 +132,11 @@
       .row-stats { display: flex; flex-wrap: wrap; gap: 8px; color: var(--muted); font-size: 12px; }
       .row-reason { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.35; }
       .empty-state { margin: 0; color: var(--faint); font-size: 12px; line-height: 1.45; }
+      aside .portfolio-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+      aside .bucket { padding: 10px 8px; }
+      aside .bucket span { min-height: 24px; font-size: 9px; }
+      aside .portfolio-body { grid-template-columns: 1fr; }
+      aside .portfolio-col:first-child { border-right: 0; border-bottom: 1px solid rgba(238,246,240,.08); }
       @media (max-width: 820px) {
         .shell { grid-template-columns: 1fr; }
         aside { border-right: 0; border-bottom: 1px solid rgba(237,247,239,.12); max-height: none; }
@@ -175,6 +180,26 @@
           </div>
           <div class="skills" id="skills"></div>
         </section>
+        <section class="portfolio" aria-label="AImeme portfolio">
+          <div class="portfolio-head">
+            <div class="portfolio-title">
+              <strong>AImeme Portfolio</strong>
+              <span id="portfolioSource">Tracked tokens now. Wallet import when configured.</span>
+            </div>
+            <button class="portfolio-refresh" type="button" id="portfolioRefresh">Refresh</button>
+          </div>
+          <div class="portfolio-grid" id="portfolioBuckets"></div>
+          <div class="portfolio-body">
+            <div class="portfolio-col">
+              <div class="col-label">Positions</div>
+              <div id="portfolioPositions"></div>
+            </div>
+            <div class="portfolio-col">
+              <div class="col-label">Watchlist</div>
+              <div id="portfolioWatchlist"></div>
+            </div>
+          </div>
+        </section>
         <div class="actions">
           <div class="action-group">
             <div class="group-label">Market actions</div>
@@ -199,26 +224,6 @@
           <h1>Command Center</h1>
           <p id="subtitle">Model: deepseek/deepseek-v4-flash via OpenRouter</p>
         </div>
-        <section class="portfolio" aria-label="AImeme portfolio">
-          <div class="portfolio-head">
-            <div class="portfolio-title">
-              <strong>AImeme Portfolio</strong>
-              <span id="portfolioSource">Tracked tokens now. Wallet import when configured.</span>
-            </div>
-            <button class="portfolio-refresh" type="button" id="portfolioRefresh">Refresh</button>
-          </div>
-          <div class="portfolio-grid" id="portfolioBuckets"></div>
-          <div class="portfolio-body">
-            <div class="portfolio-col">
-              <div class="col-label">Positions</div>
-              <div id="portfolioPositions"></div>
-            </div>
-            <div class="portfolio-col">
-              <div class="col-label">Watchlist</div>
-              <div id="portfolioWatchlist"></div>
-            </div>
-          </div>
-        </section>
         <section class="messages" id="messages"></section>
         <form class="composer" id="form">
           <textarea id="input" placeholder="Example: quote swapping 250 USDC into ETH on Base, then show the route provider."></textarea>
