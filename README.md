@@ -16,6 +16,35 @@
 
 Use any model you want — [Nous Portal](https://portal.nousresearch.com), [OpenRouter](https://openrouter.ai) (200+ models), [NovitaAI](https://novita.ai) (AI-native cloud for Model API, Agent Sandbox, and GPU Cloud), [NVIDIA NIM](https://build.nvidia.com) (Nemotron), [Xiaomi MiMo](https://platform.xiaomimimo.com), [z.ai/GLM](https://z.ai), [Kimi/Moonshot](https://platform.moonshot.ai), [MiniMax](https://www.minimax.io), [Hugging Face](https://huggingface.co), OpenAI, or your own endpoint. Switch with `hermes model` — no code changes, no lock-in.
 
+## Gary's Autonomous Trading Agent
+
+This deployment adds a compact Vercel/OpenRouter agent for Nuvolari execution research and AImeme memecoin scouting.
+
+- 🧠 **Autonomous Hermes coordinator** — routes work across discovery, tape, safety, market-monitor, smart-money, execution, and learning lanes.
+- 🌪️ **AImeme swarm** — scans any chain via GeckoTerminal/CoinGecko, checks DexScreener tape/liquidity, runs Rugcheck or GoPlus safety, and returns `WATCH`, `NO BUY`, `TAKE_PROFIT`, `TRIM_OR_EXIT`, or quote-ready next steps.
+- ⏱️ **Autonomous cron endpoint** — `/api/cron/aimeme` emits compact decisions only, so raw API payloads do not bloat model context. Vercel Hobby schedules it daily; call the same endpoint every 15 minutes from an external scheduler or upgrade Vercel for native 15-minute cron.
+- 💸 **AgentCash-ready** — generates exact paid Nansen/AgentCash commands for smart-money enrichment, but does not spend x402 funds from Vercel.
+- 📈 **Price monitor** — set `AIMEME_TRACKED_TOKENS` to track live prices, liquidity, PnL, and hold/trim/exit hints.
+- 🪽 **Nuvolari wired** — live yield discovery (`/v1/yields`, `/v1/yields/stablecoins`) plus execution quote/execute paths (`/v1/execution/quote`, `/v1/execution/execute`).
+- 🔐 **Wallet boundary** — Hermes can find, rank, monitor, and prepare quotes autonomously; final swaps/buys still require wallet EOA, exact addresses, integer amounts, and user signatures.
+
+Useful env vars:
+
+```bash
+OPENROUTER_API_KEY=...
+OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_MAX_TOKENS=8192
+OPENROUTER_HISTORY_TURNS=24
+OPENROUTER_TRANSFORMS=middle-out
+NUVOLARI_API_BASE_URL=https://api.staging.nuvolari.ai
+NUVOLARI_API_KEY=...
+NUVOLARI_SECRET_API_KEY=...
+COINGECKO_API_KEY=...                  # optional; public GeckoTerminal fallback works
+AIMEME_TRACKED_TOKENS='[{"symbol":"TOKEN","chain":"base","address":"0x...","entry_price":"0.001"}]'
+AIMEME_DECISION_WEBHOOK_URL=https://... # optional compact cron decision sink
+AIMEME_CRON_SECRET=...                 # optional protection for manual cron calls
+```
+
 <table>
 <tr><td><b>A real terminal interface</b></td><td>Full TUI with multiline editing, slash-command autocomplete, conversation history, interrupt-and-redirect, and streaming tool output.</td></tr>
 <tr><td><b>Lives where you do</b></td><td>Telegram, Discord, Slack, WhatsApp, Signal, and CLI — all from a single gateway process. Voice memo transcription, cross-platform conversation continuity.</td></tr>
