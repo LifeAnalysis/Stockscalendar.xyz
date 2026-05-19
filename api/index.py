@@ -501,6 +501,100 @@ def docs_response(topic: str, ask: str = "") -> Dict[str, Any]:
         return {"ok": False, "topic": topic, "error": str(exc)}
 
 
+FRONTEND_HTML = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Hermes Nuvolari Agent</title>
+  <style>
+    :root { color-scheme: dark; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #09110f; color: #edf7ef; }
+    * { box-sizing: border-box; } body { margin: 0; min-height: 100vh; background: #09110f; }
+    .shell { min-height: 100vh; display: grid; grid-template-columns: 320px 1fr; }
+    aside { border-right: 1px solid rgba(237,247,239,.12); padding: 24px; background: #0d1714; }
+    main { padding: 24px; display: grid; grid-template-rows: auto 1fr auto; gap: 16px; max-height: 100vh; }
+    h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: 0; } p { color: rgba(237,247,239,.72); line-height: 1.5; }
+    .status, .actions { display: grid; gap: 8px; margin-top: 20px; }
+    .pill { border: 1px solid rgba(237,247,239,.14); border-radius: 6px; padding: 10px 12px; color: rgba(237,247,239,.8); font-size: 13px; }
+    .ok { color: #7ee787; } .warn { color: #ffcc66; }
+    button, textarea, input { font: inherit; border-radius: 6px; border: 1px solid rgba(237,247,239,.16); background: #111d19; color: #edf7ef; }
+    button { padding: 10px 12px; cursor: pointer; text-align: left; } button:hover { border-color: rgba(126,231,135,.5); }
+    .messages { overflow: auto; display: flex; flex-direction: column; gap: 12px; padding-right: 6px; }
+    .msg { border: 1px solid rgba(237,247,239,.12); border-radius: 8px; padding: 14px; background: rgba(255,255,255,.03); white-space: pre-wrap; }
+    .msg.user { border-color: rgba(126,231,135,.25); background: rgba(126,231,135,.06); }
+    .msg .role { display: block; color: rgba(237,247,239,.52); font-size: 12px; margin-bottom: 8px; text-transform: uppercase; }
+    .composer { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: end; }
+    textarea { min-height: 74px; resize: vertical; padding: 12px; }
+    .send { min-width: 110px; text-align: center; background: #dfffe5; color: #0b1612; border: 0; font-weight: 700; }
+    .trace { margin-top: 10px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: rgba(237,247,239,.65); overflow: auto; }
+    label { display: flex; gap: 8px; align-items: center; color: rgba(237,247,239,.75); font-size: 13px; margin-top: 12px; }
+    @media (max-width: 820px) { .shell { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid rgba(237,247,239,.12); } main { max-height: none; min-height: 70vh; } .composer { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <aside>
+      <h1>Hermes Nuvolari Agent</h1>
+      <p>Ask for swaps, buys, yield routes, LP setup, or Nuvolari docs. Real execution is gated behind explicit confirmation.</p>
+      <div class="status" id="status"></div>
+      <label><input type="checkbox" id="execute" /> allow execution calls for this message</label>
+      <div class="actions">
+        <button data-prompt="Find USDC yield opportunities for a balanced profile on Base.">USDC yield scan</button>
+        <button data-prompt="Quote swapping 100 USDC into ETH on Base. Do not execute.">Swap quote</button>
+        <button data-prompt="Show me how Nuvolari add liquidity works and what inputs you need from me.">LP setup</button>
+        <button data-prompt="Buy 0.05 ETH using USDC on Base. Prepare only, do not execute.">Buy ETH</button>
+        <button data-prompt="Use Context7 Nuvolari docs and explain which Nuvolari execution tools you can call.">Context7 docs</button>
+      </div>
+    </aside>
+    <main>
+      <div><h1>Command Center</h1><p id="subtitle">Model: deepseek/deepseek-v4-flash via OpenRouter</p></div>
+      <section class="messages" id="messages"></section>
+      <form class="composer" id="form">
+        <textarea id="input" placeholder="Example: quote swapping 250 USDC into ETH on Base, then show the route provider."></textarea>
+        <button class="send" type="submit">Send</button>
+      </form>
+    </main>
+  </div>
+  <script>
+    const messagesEl = document.getElementById("messages");
+    const inputEl = document.getElementById("input");
+    const executeEl = document.getElementById("execute");
+    const statusEl = document.getElementById("status");
+    const subtitle = document.getElementById("subtitle");
+    const history = [];
+    function esc(str) { return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[c])); }
+    function addMessage(role, content, trace) {
+      const div = document.createElement("div");
+      div.className = `msg ${role}`;
+      div.innerHTML = `<span class="role">${role}</span>${esc(content || "")}`;
+      if (trace && trace.length) { const pre = document.createElement("pre"); pre.className = "trace"; pre.textContent = JSON.stringify(trace, null, 2); div.appendChild(pre); }
+      messagesEl.appendChild(div); messagesEl.scrollTop = messagesEl.scrollHeight;
+    }
+    async function loadHealth() {
+      const h = await (await fetch("/api/health")).json();
+      subtitle.textContent = `Model: ${h.model} via OpenRouter`;
+      statusEl.innerHTML = `
+        <div class="pill ${h.openrouter_configured ? "ok" : "warn"}">OpenRouter ${h.openrouter_configured ? "configured" : "missing"}</div>
+        <div class="pill ${h.nuvolari_credentials_configured ? "ok" : "warn"}">Nuvolari keys ${h.nuvolari_credentials_configured ? "configured" : "missing"}</div>
+        <div class="pill ${h.nuvolari_base_url_configured ? "ok" : "warn"}">Nuvolari API URL ${h.nuvolari_base_url_configured ? "configured" : "needed"}</div>
+        <div class="pill ok">Context7 Nuvolari connected</div>`;
+    }
+    async function send(message) {
+      addMessage("user", message); history.push({ role: "user", content: message }); inputEl.value = ""; addMessage("assistant", "Working...");
+      const pending = messagesEl.lastChild;
+      try {
+        const res = await fetch("/api/chat", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message, history: history.slice(0, -1), execute: executeEl.checked }) });
+        const data = await res.json(); pending.remove(); addMessage("assistant", data.reply || JSON.stringify(data), data.tool_trace); history.push({ role: "assistant", content: data.reply || "" }); loadHealth();
+      } catch (err) { pending.remove(); addMessage("assistant", `Request failed: ${err.message}`); }
+    }
+    document.getElementById("form").addEventListener("submit", event => { event.preventDefault(); const message = inputEl.value.trim(); if (message) send(message); });
+    document.querySelectorAll("[data-prompt]").forEach(btn => btn.addEventListener("click", () => { inputEl.value = btn.dataset.prompt; inputEl.focus(); }));
+    addMessage("assistant", "Ready. Ask for a Nuvolari swap, buy, yield route, or LP action."); loadHealth();
+  </script>
+</body>
+</html>"""
+
+
 class handler(BaseHTTPRequestHandler):
     def _send(self, status: int, body: bytes, content_type: str) -> None:
         self.send_response(status)
@@ -527,6 +621,11 @@ class handler(BaseHTTPRequestHandler):
     def do_OPTIONS(self) -> None:
         self._send(204, b"", "text/plain")
 
+    def do_HEAD(self) -> None:
+        self.send_response(200)
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.end_headers()
+
     def do_GET(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
@@ -543,7 +642,8 @@ class handler(BaseHTTPRequestHandler):
             self._send_json(200, nuvolari_context7_query(question))
             return
         index_path = Path(__file__).resolve().parents[1] / "public" / "index.html"
-        self._send(200, index_path.read_bytes(), "text/html; charset=utf-8")
+        body = index_path.read_text() if index_path.exists() else FRONTEND_HTML
+        self._send(200, body.encode("utf-8"), "text/html; charset=utf-8")
 
     def do_POST(self) -> None:
         parsed = urllib.parse.urlparse(self.path)
