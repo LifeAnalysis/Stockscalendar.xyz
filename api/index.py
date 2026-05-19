@@ -33,7 +33,7 @@ def _json_request(
     timeout: int = 45,
 ) -> Dict[str, Any]:
     data = None
-    req_headers = {"Accept": "application/json", **(headers or {})}
+    req_headers = {"Accept": "application/json", "User-Agent": "hermes-nuvolari-agent/1.0", **(headers or {})}
     if body is not None:
         data = json.dumps(body).encode("utf-8")
         req_headers["Content-Type"] = "application/json"
@@ -205,13 +205,26 @@ def nuvolari_add_liquidity(
 
 
 def nuvolari_raw_api(method: str, path: str, body: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    if path.startswith("http://") or path.startswith("https://"):
+        return {
+            "ok": False,
+            "error": "External URLs are not valid Nuvolari API paths.",
+            "message": "Use nuvolari_docs_query or nuvolari_context7_query for documentation URLs. Use nuvolari_raw_api only for paths on NUVOLARI_API_BASE_URL.",
+            "path": path,
+        }
     return _nuvolari_call(path, body or {}, method=method)
 
 
 def nuvolari_docs_query(topic: str, question: str) -> Dict[str, Any]:
     url = NUVOLARI_DOCS.get(topic.lower(), NUVOLARI_DOCS["shortcuts"])
     ask_url = f"{url}?ask={urllib.parse.quote(question)}"
-    req = urllib.request.Request(ask_url, headers={"Accept": "text/markdown"})
+    req = urllib.request.Request(
+        ask_url,
+        headers={
+            "Accept": "text/markdown,text/plain,*/*",
+            "User-Agent": "Mozilla/5.0 hermes-nuvolari-agent/1.0",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return {"ok": True, "topic": topic, "answer": resp.read().decode("utf-8", errors="replace")}
@@ -220,7 +233,10 @@ def nuvolari_docs_query(topic: str, question: str) -> Dict[str, Any]:
 
 
 def nuvolari_context7_query(question: str = "") -> Dict[str, Any]:
-    req = urllib.request.Request(CONTEXT7_NUVOLARI, headers={"Accept": "text/plain"})
+    req = urllib.request.Request(
+        CONTEXT7_NUVOLARI,
+        headers={"Accept": "text/plain,*/*", "User-Agent": "Mozilla/5.0 hermes-nuvolari-agent/1.0"},
+    )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             content = resp.read().decode("utf-8", errors="replace")
@@ -390,6 +406,7 @@ TOOLS = [
 SYSTEM_PROMPT = """You are Gary's Hermes Nuvolari execution agent.
 Use the Nuvolari tools whenever the user asks about swaps, buys, yield, LPs, routes, positions, or execution.
 Never invent filled trades. If execute is false or the Nuvolari API base URL is missing, explain what is ready and what config is missing.
+If a tool returns needs_configuration, stop calling more tools and answer with the missing variable and intended request.
 Before real execution, require an explicit user confirmation that includes asset, amount, chain, and wallet.
 Use nuvolari_context7_query or docs_query when the exact Nuvolari behavior is unclear."""
 
@@ -436,6 +453,28 @@ def _coerce_tool_args(raw: str) -> Dict[str, Any]:
         return {}
 
 
+def _configuration_reply(result: Dict[str, Any]) -> str:
+    intended = result.get("intended_request") if isinstance(result.get("intended_request"), dict) else {}
+    method = intended.get("method", "POST")
+    path = intended.get("path", "")
+    body = intended.get("body", {})
+    lines = [
+        "I cannot call live Nuvolari execution yet because `NUVOLARI_API_BASE_URL` is not configured in Vercel.",
+        "",
+        "The Nuvolari keys are present, and the agent prepared this request:",
+        f"`{method} {path}`",
+    ]
+    if body:
+        lines.extend(["", "Payload:", json.dumps(body, indent=2)])
+    lines.extend(
+        [
+            "",
+            "Set `NUVOLARI_API_BASE_URL` to the Nuvolari execution API host, then this same request will call the live API instead of stopping here.",
+        ]
+    )
+    return "\n".join(lines)
+
+
 def chat_response(payload: Dict[str, Any]) -> Dict[str, Any]:
     message = str(payload.get("message") or "").strip()
     if not message:
@@ -476,6 +515,13 @@ def chat_response(payload: Dict[str, Any]) -> Dict[str, Any]:
             except TypeError as exc:
                 result = {"ok": False, "error": str(exc), "args": args}
             tool_trace.append({"name": name, "args": {k: v for k, v in args.items() if "key" not in k.lower()}, "result": result})
+            if isinstance(result, dict) and result.get("needs_configuration") == "NUVOLARI_API_BASE_URL":
+                return {
+                    "reply": _configuration_reply(result),
+                    "tool_trace": tool_trace,
+                    "health": health(),
+                    "timestamp": int(time.time()),
+                }
             messages.append(
                 {
                     "role": "tool",
@@ -493,7 +539,13 @@ def docs_response(topic: str, ask: str = "") -> Dict[str, Any]:
     url = NUVOLARI_DOCS.get(topic.lower())
     if not url:
         return {"ok": False, "error": "Unknown docs topic"}
-    req = urllib.request.Request(url, headers={"Accept": "text/markdown"})
+    req = urllib.request.Request(
+        url,
+        headers={
+            "Accept": "text/markdown,text/plain,*/*",
+            "User-Agent": "Mozilla/5.0 hermes-nuvolari-agent/1.0",
+        },
+    )
     try:
         with urllib.request.urlopen(req, timeout=20) as resp:
             return {"ok": True, "topic": topic, "markdown": resp.read().decode("utf-8", errors="replace")}
