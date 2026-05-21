@@ -8,7 +8,7 @@ const InteractiveStockChart = React.lazy(() =>
   import("./components/InteractiveStockChart.jsx").then((module) => ({ default: module.InteractiveStockChart }))
 );
 
-const fallbackStocks = [
+const stockPresentation = [
   {
     symbol: "TSLA",
     name: "Tesla",
@@ -17,14 +17,7 @@ const fallbackStocks = [
     logoUrl: "/logos/tesla.svg",
     logoBg: "#f7eeee",
     logoFg: "#c9252d",
-    score: 72,
-    earnings: "TBD",
-    chart: [18, 24, 21, 28, 35, 31, 42, 38, 45, 51],
-    bullets: [
-      "Track delivery, margin, and guidance language into the next report.",
-      "Hermes should separate event risk from broad market beta before quote prep.",
-      "A testnet buy should still state invalidation, target, and expected catalyst."
-    ]
+    score: 0
   },
   {
     symbol: "AMZN",
@@ -34,14 +27,7 @@ const fallbackStocks = [
     logoUrl: "/logos/amazon.svg",
     logoBg: "#fff3d9",
     logoFg: "#111111",
-    score: 66,
-    earnings: "TBD",
-    chart: [24, 20, 28, 31, 29, 35, 37, 42, 44, 48],
-    bullets: [
-      "Watch AWS growth, retail margin, and ad revenue contribution.",
-      "Hermes should explain whether the earnings setup is catalyst-driven or valuation-driven.",
-      "Use the trade ticket only after the expected move is clear."
-    ]
+    score: 0
   },
   {
     symbol: "PLTR",
@@ -51,14 +37,7 @@ const fallbackStocks = [
     logoUrl: "/logos/palantir.svg",
     logoBg: "#edf0f4",
     logoFg: "#20242a",
-    score: 74,
-    earnings: "TBD",
-    chart: [14, 19, 27, 22, 36, 32, 44, 39, 52, 48],
-    bullets: [
-      "High narrative sensitivity makes pre-earnings discipline important.",
-      "Hermes should call out valuation, guidance language, and AI demand signals.",
-      "Use smaller testnet sizing assumptions until research confidence improves."
-    ]
+    score: 0
   },
   {
     symbol: "NFLX",
@@ -68,14 +47,7 @@ const fallbackStocks = [
     logoUrl: "/logos/netflix.svg",
     logoBg: "#fae8e6",
     logoFg: "#e50914",
-    score: 63,
-    earnings: "TBD",
-    chart: [31, 29, 32, 28, 34, 39, 36, 43, 41, 47],
-    bullets: [
-      "Watch subscriber growth, ad tier, and margin commentary.",
-      "Hermes should compare event risk with recent price expectations.",
-      "Trade ticket remains testnet-only until quote provider responds."
-    ]
+    score: 0
   },
   {
     symbol: "AMD",
@@ -85,20 +57,8 @@ const fallbackStocks = [
     logoUrl: "/logos/amd.svg",
     logoBg: "#eef4ee",
     logoFg: "#0b6b3a",
-    score: 70,
-    earnings: "TBD",
-    chart: [20, 26, 23, 34, 38, 33, 41, 49, 45, 56],
-    bullets: [
-      "Track data-center demand, margin guide, and Nvidia sympathy flows.",
-      "Hermes should separate earnings catalyst from semiconductor index movement.",
-      "Quote prep should stay explicit about token addresses and testnet chain."
-    ]
+    score: 0
   }
-];
-
-const fallbackPayTokens = [
-  { symbol: "USDG", name: "USDG", address: "0x7E955252E15c84f5768B83c41a71F9eba181802F" },
-  { symbol: "WETH", name: "Wrapped Ether", address: "0x7943e237c7F95DA44E0301572D358911207852Fa" }
 ];
 
 function Logo({ stock }) {
@@ -224,32 +184,15 @@ function TokenPicker({ open, title, items, selectedSymbol, onSelect, onClose }) 
   );
 }
 
-function stockChartData(stock, priceSnapshot) {
-  const points = stock.chart || [10, 12, 11, 14, 15];
-  const now = new Date();
-  const liveClose = Number(priceSnapshot?.close);
-  return points.map((value, index) => {
-    const date = new Date(now);
-    date.setDate(now.getDate() - (points.length - index - 1) * 7);
-    const drift = (index % 3) - 1;
-    const close = index === points.length - 1 && Number.isFinite(liveClose) ? liveClose : value;
-    return {
-      date: date.toISOString(),
-      open: close - 0.8 + drift * 0.2,
-      high: close + 1.4 + drift * 0.3,
-      low: Math.max(close - 1.6 + drift * 0.2, 0.1),
-      close
-    };
-  });
-}
-
-function StockChartView({ data, ticker }) {
+function StockChartView({ data, ticker, status }) {
   return data?.length ? (
     <React.Suspense fallback={<div className="chart-fallback" />}>
       <InteractiveStockChart chartData={data} ticker={ticker} />
     </React.Suspense>
   ) : (
-    <div className="chart-fallback" />
+    <div className="chart-fallback chart-state">
+      {status === "loading" ? "Loading Yahoo chart..." : "Chart unavailable from Yahoo."}
+    </div>
   );
 }
 
@@ -261,6 +204,23 @@ async function readJsonResponse(response) {
   } catch {
     return null;
   }
+}
+
+function decorateStock(item, index, recommendation, price) {
+  const presentation = stockPresentation.find((stock) => stock.symbol === item.symbol) || stockPresentation[index % stockPresentation.length] || {};
+  return {
+    ...item,
+    logoText: presentation.logoText || item.symbol.slice(0, 2),
+    logoUrl: presentation.logoUrl || item.logoUrl,
+    logoBg: presentation.logoBg || "#fff",
+    logoFg: presentation.logoFg || "#202621",
+    score: recommendation?.confidence || 0,
+    bullets: [
+      recommendation?.reason,
+      recommendation?.next_step,
+      price?.ok && price.close ? `Public quote close ${price.close}${price.date ? ` on ${price.date}` : ""}.` : null
+    ].filter(Boolean)
+  };
 }
 
 function HermesOutputBar({ stock, hermesOutput }) {
@@ -291,8 +251,8 @@ function HermesOutputBar({ stock, hermesOutput }) {
 function App() {
   const [selected, setSelected] = React.useState("TSLA");
   const [side, setSide] = React.useState("buy");
-  const [stocks, setStocks] = React.useState(fallbackStocks);
-  const [payTokens, setPayTokens] = React.useState(fallbackPayTokens);
+  const [stocks, setStocks] = React.useState([]);
+  const [payTokens, setPayTokens] = React.useState([]);
   const [payTokenSymbol, setPayTokenSymbol] = React.useState("USDG");
   const [amount, setAmount] = React.useState("");
   const [wallet, setWallet] = React.useState("");
@@ -300,11 +260,8 @@ function App() {
   const [routePreview, setRoutePreview] = React.useState("Choose a supported stock to build a route preview.");
   const [backend, setBackend] = React.useState({ health: false, intel: false, trade: false });
   const [hermesOutput, setHermesOutput] = React.useState(null);
-  const [charts, setCharts] = React.useState(() =>
-    Object.fromEntries(
-      fallbackStocks.map((item) => [item.symbol, stockChartData(item)])
-    )
-  );
+  const [charts, setCharts] = React.useState({});
+  const [chartStatus, setChartStatus] = React.useState("idle");
 
   const stock = stocks.find((item) => item.symbol === selected);
   const payToken = payTokens.find((token) => token.symbol === payTokenSymbol) || payTokens[0];
@@ -313,7 +270,29 @@ function App() {
   const amountNumber = Number(amount || 0);
   const selectedScore = stock ? stock.score : 0;
   const estimatedOutput = stock && amountNumber > 0 ? (amountNumber / Math.max(stock.score, 1)).toFixed(6) : "0";
-  const selectedChartData = stock ? charts[stock.symbol] || stockChartData(stock) : [];
+  const selectedChartData = stock ? charts[stock.symbol] || [] : [];
+
+  const loadYahooCharts = React.useCallback(async (symbols) => {
+    if (!symbols.length) {
+      setCharts({});
+      setChartStatus("idle");
+      return;
+    }
+    setChartStatus("loading");
+    try {
+      const res = await fetch(`/api/stocks/chart?symbols=${encodeURIComponent(symbols.join(","))}`);
+      const payload = await readJsonResponse(res);
+      const entries = (payload?.charts || [])
+        .filter((chart) => chart.ok && chart.data?.length)
+        .map((chart) => [chart.symbol, chart.data]);
+      setCharts(Object.fromEntries(entries));
+      setChartStatus(entries.length ? "ready" : "error");
+    } catch (error) {
+      console.warn("Yahoo chart API unavailable", error);
+      setCharts({});
+      setChartStatus("error");
+    }
+  }, []);
 
   React.useEffect(() => {
     async function loadBackend() {
@@ -330,6 +309,24 @@ function App() {
       }
 
       try {
+        const stockRes = await fetch("/api/robinhood/stocks");
+        const catalog = await readJsonResponse(stockRes);
+        const loadedStocks = catalog?.stocks || [];
+        const loadedTokens = catalog?.payment_tokens || [];
+        if (loadedStocks.length) {
+          const nextStocks = loadedStocks.map((item, index) => decorateStock(item, index));
+          setStocks(nextStocks);
+          if (!nextStocks.some((item) => item.symbol === selected)) setSelected(nextStocks[0]?.symbol || "");
+        }
+        if (loadedTokens.length) {
+          setPayTokens(loadedTokens);
+          if (!loadedTokens.some((token) => token.symbol === payTokenSymbol)) setPayTokenSymbol(loadedTokens[0]?.symbol || "");
+        }
+      } catch (error) {
+        console.warn("Robinhood stock API unavailable", error);
+      }
+
+      try {
         const outputRes = await fetch("/api/hermes/output");
         const output = await readJsonResponse(outputRes);
         const intel = output?.data;
@@ -341,27 +338,11 @@ function App() {
           const loadedTokens = intel.robinhood_chain?.payment_tokens || [];
           if (loadedStocks.length) {
             const nextStocks = loadedStocks.map((item, index) => {
-              const fallback = fallbackStocks.find((stock) => stock.symbol === item.symbol) || fallbackStocks[index % fallbackStocks.length];
               const recommendation = recommendations.get(item.symbol);
               const price = prices.get(item.symbol);
-              return {
-                ...fallback,
-                ...item,
-                logoText: fallback.logoText,
-                logoUrl: fallback.logoUrl,
-                logoBg: fallback.logoBg,
-                logoFg: fallback.logoFg,
-                score: recommendation?.confidence || fallback.score,
-                chart: fallback.chart,
-                bullets: [
-                  recommendation?.reason,
-                  recommendation?.next_step,
-                  price?.ok && price.close ? `Public quote close ${price.close}${price.date ? ` on ${price.date}` : ""}.` : null
-                ].filter(Boolean)
-              };
+              return decorateStock(item, index, recommendation, price);
             });
             setStocks(nextStocks);
-            setCharts(Object.fromEntries(nextStocks.map((item) => [item.symbol, stockChartData(item, prices.get(item.symbol))])));
             nextBackend.intel = true;
           }
           if (loadedTokens.length) setPayTokens(loadedTokens);
@@ -372,7 +353,12 @@ function App() {
       setBackend(nextBackend);
     }
     loadBackend();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  React.useEffect(() => {
+    loadYahooCharts(stocks.map((item) => item.symbol));
+  }, [loadYahooCharts, stocks]);
 
   React.useEffect(() => {
     if (!stock || !payToken) {
@@ -578,7 +564,7 @@ function App() {
               </div>
               </div>
             <div className="detail-stack">
-              <StockChartView data={selectedChartData} ticker={stock.symbol} />
+              <StockChartView data={selectedChartData} ticker={stock.symbol} status={chartStatus} />
               <HermesOutputBar stock={stock} hermesOutput={hermesOutput} />
               <div className="cn-card">
                 <div className="cn-card-content flex flex-col gap-3">

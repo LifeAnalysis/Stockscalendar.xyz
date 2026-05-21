@@ -42,6 +42,9 @@ EXPLORER_SOURCE_TIMEOUT_MS=6000
 STOCK_SIGNALS_TIMEOUT_MS=12000
 STOCK_SIGNALS_CACHE_SECONDS=300
 STOOQ_TIMEOUT_MS=6000
+YAHOO_CHART_TIMEOUT_MS=6000
+YAHOO_CHART_RANGE=3mo
+YAHOO_CHART_INTERVAL=1d
 SEC_TIMEOUT_MS=8000
 SEC_USER_AGENT=hermes-agent-backend/2.0 contact@example.com
 GDELT_TIMEOUT_MS=3000
@@ -65,7 +68,7 @@ Robinhood stock tokens are currently the official testnet contracts from `https:
 
 Kalshi market data uses the public Trade API series and market feeds, then filters locally against Robinhood stock symbols and company keywords such as Tesla, Amazon, Palantir, Netflix, and Advanced Micro Devices. Hermes does not treat `kalshi.com/search` pages as machine-readable source data, because the website search can surface noisy or protected results that are not a clean execution signal.
 
-Stock context comes from free/no-secret feeds: Stooq public quote CSVs, SEC EDGAR submissions, and GDELT news search. Calendar data uses public finance endpoints where available and always returns fallback public links for manual inspection.
+Stock context comes from free/no-secret feeds: Stooq public quote CSVs, Yahoo Chart historical OHLC data, SEC EDGAR submissions, and GDELT news search. Calendar data uses public finance endpoints where available and returns public links for manual inspection.
 
 ## Data Pipeline
 

@@ -75,6 +75,25 @@ export type PriceSnapshot = {
   error?: string;
 };
 
+export type ChartPoint = {
+  date: string;
+  open?: number;
+  high?: number;
+  low?: number;
+  close: number;
+  volume?: number;
+};
+
+export type ChartSnapshot = {
+  symbol: string;
+  ok: boolean;
+  source: string;
+  range: string;
+  interval: string;
+  data: ChartPoint[];
+  error?: string;
+};
+
 export type FilingSnapshot = {
   symbol: string;
   ok: boolean;
@@ -213,6 +232,61 @@ async function fetchYahooPrice(stock: RobinhoodToken, stooqError: string): Promi
     low: lastNumber(quote?.low),
     close,
     volume: lastNumber(quote?.volume)
+  };
+}
+
+function numberAt(values: Array<number | null> | undefined, index: number): number | undefined {
+  const value = values?.[index];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+export async function fetchYahooChart(
+  stock: RobinhoodToken,
+  range = env("YAHOO_CHART_RANGE", "3mo"),
+  interval = env("YAHOO_CHART_INTERVAL", "1d")
+): Promise<ChartSnapshot> {
+  const source = `${YAHOO_CHART_SOURCE}${encodeURIComponent(stock.symbol)}`;
+  const url = `${source}?range=${encodeURIComponent(range)}&interval=${encodeURIComponent(interval)}`;
+  const response = await fetchJson<YahooChartResponse>(url, {
+    timeoutMs: Number(env("YAHOO_CHART_TIMEOUT_MS", "6000")) || 6000
+  });
+  const result = response.data?.chart?.result?.[0];
+  const quote = result?.indicators?.quote?.[0];
+  const timestamps = result?.timestamp || [];
+  const data: ChartPoint[] = timestamps
+    .map((timestamp, index): ChartPoint | null => {
+      const close = numberAt(quote?.close, index);
+      if (typeof close !== "number") return null;
+      return {
+        date: dateFromUnix(timestamp) || new Date(timestamp * 1000).toISOString(),
+        open: numberAt(quote?.open, index),
+        high: numberAt(quote?.high, index),
+        low: numberAt(quote?.low, index),
+        close,
+        volume: numberAt(quote?.volume, index)
+      };
+    })
+    .filter((point): point is ChartPoint => point !== null);
+
+  if (!response.ok || !result || !data.length) {
+    return {
+      symbol: stock.symbol,
+      ok: false,
+      source: YAHOO_CHART_SOURCE,
+      range,
+      interval,
+      data: [],
+      error: response.error || "yahoo_chart_unavailable"
+    };
+  }
+
+  return {
+    symbol: stock.symbol,
+    ok: true,
+    source: YAHOO_CHART_SOURCE,
+    range,
+    interval,
+    data
   };
 }
 

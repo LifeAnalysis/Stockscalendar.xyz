@@ -937,6 +937,16 @@ select {
   height: 190px;
 }
 
+.chart-state {
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--muted-foreground);
+  font-size: 13px;
+  background: color-mix(in oklab, var(--paper-strong) 72%, transparent);
+}
+
 .contract-row {
   display: flex;
   justify-content: flex-end;
