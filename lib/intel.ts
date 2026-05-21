@@ -17,6 +17,7 @@ type StockRecommendation = {
   label: string;
   confidence: number;
   rationale: string;
+  user_action: string;
   evidence: {
     official_contract: string;
     kalshi_match_count: number;
@@ -26,8 +27,17 @@ type StockRecommendation = {
       score: number;
       yes_bid_dollars?: string;
       yes_ask_dollars?: string;
+      no_bid_dollars?: string;
+      no_ask_dollars?: string;
       liquidity_dollars?: string;
       close_time?: string;
+    };
+    market_pricing?: {
+      yes_bid?: string;
+      yes_ask?: string;
+      no_bid?: string;
+      no_ask?: string;
+      spread_note: string;
     };
     calendar_ok: boolean;
     earnings_dates: string[];
@@ -100,6 +110,7 @@ function kalshiTimeoutFallback(): Awaited<ReturnType<typeof matchStockMarkets>> 
     source: "Kalshi public markets timeout",
     scanned_markets: 0,
     error: "source_timeout",
+    searched_terms: [],
     stocks: robinhoodStockTokens.map((stock) => ({ stock, match_count: 0, markets: [] }))
   };
 }
@@ -208,12 +219,30 @@ function buildStockRecommendations(
         : recommendation === "watch"
           ? "Watch"
           : "Wait for cleaner data";
+    const marketPricing = topMarket
+      ? {
+          yes_bid: topMarket.yes_bid_dollars,
+          yes_ask: topMarket.yes_ask_dollars,
+          no_bid: topMarket.no_bid_dollars,
+          no_ask: topMarket.no_ask_dollars,
+          spread_note:
+            topMarket.yes_bid_dollars && topMarket.yes_ask_dollars
+              ? `YES ${topMarket.yes_bid_dollars} bid / ${topMarket.yes_ask_dollars} ask; NO ${topMarket.no_bid_dollars || "n/a"} bid / ${topMarket.no_ask_dollars || "n/a"} ask`
+              : "Kalshi market returned without complete yes/no quote fields"
+        }
+      : undefined;
     const rationale =
       recommendation === "prepare_quote"
-        ? "Official contract is routeable and Hermes found usable market or event context."
+        ? `Official contract is routeable and Hermes found usable Kalshi/event context. ${marketPricing?.spread_note || ""}`.trim()
         : recommendation === "watch"
-          ? "Official contract is routeable, but the evidence is not strong enough for an execution ticket."
-          : "Official contract is routeable, but public market and calendar context are thin right now.";
+          ? `Official contract is routeable, but the evidence is not strong enough for an execution ticket. ${marketPricing?.spread_note || ""}`.trim()
+          : "Official contract is routeable, but there is no clean stock-specific Kalshi market and calendar context is thin right now.";
+    const userAction =
+      recommendation === "prepare_quote"
+        ? "Review the top Kalshi yes/no market and prepare a Robinhood Chain quote only if the user accepts the market read and wallet-signing step."
+        : recommendation === "watch"
+          ? "Keep the stock on watch. Do not ask the wallet to sign until a cleaner Kalshi or calendar signal appears."
+          : "Do not use Kalshi as a trade trigger for this stock right now. Show the official stock-token route, but wait for cleaner market data before recommending action.";
 
     return {
       symbol: stock.symbol,
@@ -221,6 +250,7 @@ function buildStockRecommendations(
       label,
       confidence,
       rationale,
+      user_action: userAction,
       evidence: {
         official_contract: stock.address,
         kalshi_match_count: marketRow?.match_count || 0,
@@ -231,10 +261,13 @@ function buildStockRecommendations(
               score: topMarket.score,
               yes_bid_dollars: topMarket.yes_bid_dollars,
               yes_ask_dollars: topMarket.yes_ask_dollars,
+              no_bid_dollars: topMarket.no_bid_dollars,
+              no_ask_dollars: topMarket.no_ask_dollars,
               liquidity_dollars: topMarket.liquidity_dollars,
               close_time: topMarket.close_time
             }
           : undefined,
+        market_pricing: marketPricing,
         calendar_ok: Boolean(calendar?.ok),
         earnings_dates: (calendar?.earnings_dates || []).filter((date): date is string => Boolean(date)),
         explorer_confirmed: explorerConfirmed

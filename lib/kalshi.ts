@@ -102,8 +102,56 @@ export async function fetchKalshiMarkets(maxPages = maxKalshiPages()): Promise<{
   return { ok: true, markets, source: `${kalshiBaseUrl()}/markets` };
 }
 
+function stockSearchQueries(stocks: RobinhoodToken[]): string[] {
+  const maxTerms = Number(env("KALSHI_MAX_SEARCH_TERMS", "8"));
+  return Array.from(
+    new Set(
+      stocks.map((stock) => stock.symbol)
+        .concat(["robinhood stock", "stock token"])
+    )
+  ).slice(0, Number.isFinite(maxTerms) ? Math.max(1, Math.trunc(maxTerms)) : 8);
+}
+
+async function fetchTargetedKalshiMarkets(stocks: RobinhoodToken[]): Promise<{
+  ok: boolean;
+  markets: KalshiMarket[];
+  error?: string;
+  source: string;
+  searched_terms: string[];
+}> {
+  const searchedTerms = stockSearchQueries(stocks);
+  const responses = [];
+  for (const query of searchedTerms) {
+    const params = new URLSearchParams({ limit: "100", status: "open", search: query });
+    responses.push(await fetchJson<MarketsResponse>(`${kalshiBaseUrl()}/markets?${params.toString()}`, { timeoutMs: 12000 }));
+  }
+  const marketsByTicker = new Map<string, KalshiMarket>();
+  const errors: string[] = [];
+
+  for (const response of responses) {
+    if (!response.ok || !response.data) {
+      errors.push(response.error || `status ${response.status}`);
+      continue;
+    }
+    for (const market of response.data.markets || []) {
+      if (market.ticker) marketsByTicker.set(market.ticker, market);
+    }
+  }
+
+  return {
+    ok: errors.length < responses.length,
+    markets: Array.from(marketsByTicker.values()),
+    error: errors.join("; ") || undefined,
+    source: `${kalshiBaseUrl()}/markets targeted stock queries`,
+    searched_terms: searchedTerms
+  };
+}
+
 export async function matchStockMarkets(stocks = robinhoodStockTokens) {
-  const feed = await fetchKalshiMarkets();
+  const feed =
+    env("KALSHI_USE_BROAD_SCAN", "") === "true"
+      ? { ...(await fetchKalshiMarkets()), searched_terms: [] }
+      : await fetchTargetedKalshiMarkets(stocks);
   const bySymbol = stocks.map((stock) => {
     const matches = feed.markets
       .map((market) => ({ market, score: scoreMarket(stock, market) }))
@@ -140,6 +188,7 @@ export async function matchStockMarkets(stocks = robinhoodStockTokens) {
     source: feed.source,
     error: feed.error,
     scanned_markets: feed.markets.length,
+    searched_terms: feed.searched_terms,
     stocks: bySymbol
   };
 }

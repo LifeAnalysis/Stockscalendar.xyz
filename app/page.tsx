@@ -30,10 +30,18 @@ type Recommendation = {
   label: string;
   confidence: number;
   rationale: string;
+  user_action: string;
   evidence: {
     official_contract: string;
     kalshi_match_count: number;
     top_kalshi_market?: Market;
+    market_pricing?: {
+      yes_bid?: string;
+      yes_ask?: string;
+      no_bid?: string;
+      no_ask?: string;
+      spread_note: string;
+    };
     calendar_ok: boolean;
     earnings_dates: string[];
     explorer_confirmed: boolean;
@@ -414,6 +422,7 @@ export default function Page() {
           {selectedRecommendation ? (
             <div className="recommendation-detail">
               <p>{selectedRecommendation.rationale}</p>
+              <p className="action-line">{selectedRecommendation.user_action}</p>
               <div className="metric-grid">
                 <div>
                   <span>Contract</span>
@@ -430,6 +439,22 @@ export default function Page() {
                 <div>
                   <span>Explorer</span>
                   <strong>{selectedRecommendation.evidence.explorer_confirmed ? "confirmed" : "not confirmed"}</strong>
+                </div>
+              </div>
+              <div className="market-price-grid">
+                <div>
+                  <span>YES bid / ask</span>
+                  <strong>
+                    {selectedRecommendation.evidence.market_pricing?.yes_bid || "n/a"} /{" "}
+                    {selectedRecommendation.evidence.market_pricing?.yes_ask || "n/a"}
+                  </strong>
+                </div>
+                <div>
+                  <span>NO bid / ask</span>
+                  <strong>
+                    {selectedRecommendation.evidence.market_pricing?.no_bid || "n/a"} /{" "}
+                    {selectedRecommendation.evidence.market_pricing?.no_ask || "n/a"}
+                  </strong>
                 </div>
               </div>
             </div>

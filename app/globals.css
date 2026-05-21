@@ -430,6 +430,33 @@ select {
   line-height: 1.5;
 }
 
+.action-line {
+  border-left: 3px solid var(--good);
+  padding-left: 10px;
+}
+
+.market-price-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.market-price-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px;
+  display: grid;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.market-price-grid span {
+  color: var(--faint);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
 .rec-chip {
   width: max-content;
   max-width: 100%;
@@ -690,6 +717,7 @@ select {
   .discovery-list,
   .field-row,
   .metric-grid,
+  .market-price-grid,
   .recommendation-row,
   .route-preview {
     grid-template-columns: 1fr;

@@ -44,8 +44,11 @@ function fallbackReply(message: string, intel: Awaited<ReturnType<typeof buildSt
   }
 
   const degraded = intel.pipeline.degraded_sources.length ? ` Degraded sources: ${intel.pipeline.degraded_sources.join(", ")}.` : "";
-  const recommendations = intel.recommendations.map((row) => `${row.symbol}: ${row.label} (${row.confidence}%)`).join("; ");
-  return `Hermes is fed with ${intel.robinhood_chain.stock_count} Robinhood stock tokens, ${intel.robinhood_chain.payment_tokens.length} payment tokens, ${intel.kalshi.scanned_markets} scanned Kalshi markets, and ${intel.calendars.length} public calendar feeds. Recommendations: ${recommendations}.${degraded}`;
+  const recommendations = intel.recommendations
+    .map((row) => `${row.symbol}: ${row.label} (${row.confidence}%) - ${row.user_action}`)
+    .join("; ");
+  const searched = intel.kalshi.searched_terms?.length ? ` Searched Kalshi terms: ${intel.kalshi.searched_terms.join(", ")}.` : "";
+  return `Hermes is fed with ${intel.robinhood_chain.stock_count} Robinhood stock tokens, ${intel.robinhood_chain.payment_tokens.length} payment tokens, ${intel.kalshi.scanned_markets} Kalshi candidate markets, and ${intel.calendars.length} public calendar feeds.${searched} Recommendations: ${recommendations}.${degraded}`;
 }
 
 async function askHermes(message: string, intel: Awaited<ReturnType<typeof buildStockIntel>>) {
@@ -74,6 +77,7 @@ async function askHermes(message: string, intel: Awaited<ReturnType<typeof build
             "Never imply that you can sign or execute a wallet transaction. You only prepare quote payloads.",
             "For quotes, require exact source_asset, target_asset, wallet_address, amount, and chainId 46630.",
             "Every stock has a recommendation in DATA_PIPELINE_JSON; use those labels and evidence instead of inventing investment advice.",
+            "When Kalshi yes/no prices exist, explain them. When no clean Kalshi market exists, tell the user to wait instead of forcing a trade.",
             "If a source is degraded, say so directly instead of inventing missing data."
           ].join(" ")
         },
