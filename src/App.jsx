@@ -333,10 +333,6 @@ function QuoteReceipt({ quote }) {
         <DetailMetric label="Amount" value={quote.amount || request.amount} />
         <DetailMetric label="Status" value={quote.needs_configuration || quote.error || quote.status || (ok ? "prepared" : "returned")} />
       </div>
-      <details className="raw-details">
-        <summary>Raw response</summary>
-        <pre>{JSON.stringify(quote, null, 2)}</pre>
-      </details>
     </div>
   );
 }
@@ -393,23 +389,11 @@ function ResearchTabs({ stock, hermesOutput, activeTab, setActiveTab, backend })
     : openrouterTrace?.configured
       ? "fallback"
       : "not configured";
-  const rawPayload = {
-    selected: stock.symbol,
-    recommendation,
-    markets,
-    calendar,
-    price,
-    filing,
-    news,
-    pipeline: intel?.pipeline
-  };
   const evidenceItems = buildEvidenceItems({ stock, recommendation, price, filing, markets, calendar, news, officialExplorer });
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "markets", label: "Markets", count: markets.length },
-    { id: "signals", label: "Signals" },
-    { id: "sources", label: "Sources" },
-    { id: "raw", label: "Raw" }
+    { id: "signals", label: "Signals" }
   ];
 
   return (
@@ -450,6 +434,31 @@ function ResearchTabs({ stock, hermesOutput, activeTab, setActiveTab, backend })
                   Explorer
                 </a>
               ) : null}
+            </div>
+            <div className="source-health-stack">
+              <div className="status-strip">
+                <StatusPill label="Health" ok={backend.health} detail={backend.health ? "live" : "missing"} />
+                <StatusPill label="Intel" ok={backend.intel} detail={backend.intel ? "loaded" : "fallback"} />
+                <StatusPill label="Trade" ok={backend.trade} detail={backend.trade ? "route ready" : "not ready"} />
+                <StatusPill label="Pipeline" ok={Boolean(intel?.pipeline?.ok)} detail={intel?.pipeline?.ok ? "clean" : "degraded"} />
+                <StatusPill label="OpenRouter" ok={Boolean(openrouterTrace?.ok)} detail={openrouterDetail} />
+                <StatusPill label="Brief" ok detail={hermesOutput?.ui_brief_source === "data.recommendations" ? "Hermes data" : "unknown"} />
+              </div>
+              <div className="pipeline-list">
+                {visibleChecks.length ? (
+                  visibleChecks.map((check) => (
+                    <div className="pipeline-item" key={check.name}>
+                      <div>
+                        <strong>{check.name?.replaceAll("_", " ")}</strong>
+                        <span>{check.source}</span>
+                      </div>
+                      <b className={check.ok ? "ok" : "degraded"}>{check.ok ? `${check.records} records` : check.error || "unavailable"}</b>
+                    </div>
+                  ))
+                ) : (
+                  <div className="empty-compact">Source checks will appear after Hermes output loads.</div>
+                )}
+              </div>
             </div>
           </div>
         ) : null}
@@ -507,43 +516,6 @@ function ResearchTabs({ stock, hermesOutput, activeTab, setActiveTab, backend })
                 </a>
               ))}
             </div>
-          </div>
-        ) : null}
-
-        {activeTab === "sources" ? (
-          <div className="insight-section">
-            <div className="status-strip">
-              <StatusPill label="Health" ok={backend.health} detail={backend.health ? "live" : "missing"} />
-              <StatusPill label="Intel" ok={backend.intel} detail={backend.intel ? "loaded" : "fallback"} />
-              <StatusPill label="Trade" ok={backend.trade} detail={backend.trade ? "route ready" : "not ready"} />
-              <StatusPill label="Pipeline" ok={Boolean(intel?.pipeline?.ok)} detail={intel?.pipeline?.ok ? "clean" : "degraded"} />
-              <StatusPill label="OpenRouter" ok={Boolean(openrouterTrace?.ok)} detail={openrouterDetail} />
-              <StatusPill label="Brief" ok detail={hermesOutput?.ui_brief_source === "data.recommendations" ? "Hermes data" : "unknown"} />
-            </div>
-            <div className="pipeline-list">
-              {visibleChecks.length ? (
-                visibleChecks.map((check) => (
-                  <div className="pipeline-item" key={check.name}>
-                    <div>
-                      <strong>{check.name?.replaceAll("_", " ")}</strong>
-                      <span>{check.source}</span>
-                    </div>
-                    <b className={check.ok ? "ok" : "degraded"}>{check.ok ? `${check.records} records` : check.error || "unavailable"}</b>
-                  </div>
-                ))
-              ) : (
-                <div className="empty-compact">Source checks will appear after Hermes output loads.</div>
-              )}
-            </div>
-          </div>
-        ) : null}
-
-        {activeTab === "raw" ? (
-          <div className="insight-section">
-            <details className="raw-details" open>
-              <summary>Selected payload</summary>
-              <pre>{JSON.stringify(rawPayload, null, 2)}</pre>
-            </details>
           </div>
         ) : null}
       </div>
