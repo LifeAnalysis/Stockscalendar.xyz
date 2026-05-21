@@ -61,6 +61,13 @@ const stockPresentation = [
   }
 ];
 
+const chartRanges = [
+  { value: "1mo", label: "1M" },
+  { value: "3mo", label: "3M" },
+  { value: "6mo", label: "6M" },
+  { value: "1y", label: "1Y" }
+];
+
 function Logo({ stock }) {
   return (
     <span
@@ -241,6 +248,75 @@ function StatusPill({ label, ok, detail }) {
   );
 }
 
+function kalshiPricingText(pricing) {
+  if (!pricing) return null;
+  const yes = pricing.yes_bid || pricing.yes_ask ? `YES ${pricing.yes_bid || "n/a"} / ${pricing.yes_ask || "n/a"}` : null;
+  const no = pricing.no_bid || pricing.no_ask ? `NO ${pricing.no_bid || "n/a"} / ${pricing.no_ask || "n/a"}` : null;
+  return [yes, no].filter(Boolean).join("; ");
+}
+
+function buildEvidenceItems({ stock, recommendation, price, filing, markets, calendar, news, officialExplorer }) {
+  const evidence = recommendation?.evidence || {};
+  const priceSnapshot = evidence.price_snapshot || (price?.ok ? price : null);
+  const latestFiling = evidence.latest_filing || filing?.latest_material;
+  const marketPricing = evidence.market_pricing;
+  const topMarket = evidence.top_kalshi_market || markets?.[0];
+  const kalshiCount = evidence.kalshi_match_count ?? markets?.length ?? 0;
+  const newsCount = evidence.news_count ?? news?.article_count ?? 0;
+  const earningsDates = evidence.earnings_dates?.length ? evidence.earnings_dates : calendar?.earnings_dates || [];
+
+  return [
+    {
+      label: "Route",
+      value: `${evidence.explorer_confirmed || officialExplorer ? "Official route confirmed" : "Official route listed"}: ${shortAddress(evidence.official_contract || stock.address)}`
+    },
+    priceSnapshot?.close
+      ? {
+          label: "Price",
+          value: `${formatMoney(priceSnapshot.close)} close${priceSnapshot.date ? ` on ${formatDate(priceSnapshot.date)}` : ""}${priceSnapshot.volume ? `, ${formatCompact(priceSnapshot.volume)} volume` : ""}`
+        }
+      : null,
+    latestFiling
+      ? {
+          label: "SEC",
+          value: `${latestFiling.form || "Filing"}${latestFiling.filing_date ? ` filed ${formatDate(latestFiling.filing_date)}` : ""}`
+        }
+      : null,
+    kalshiCount
+      ? {
+          label: "Kalshi",
+          value: `${kalshiCount} matching market${kalshiCount === 1 ? "" : "s"}${kalshiPricingText(marketPricing) ? `; ${kalshiPricingText(marketPricing)}` : topMarket?.ticker ? `; top market ${topMarket.ticker}` : ""}`
+        }
+      : null,
+    earningsDates.length
+      ? {
+          label: "Calendar",
+          value: `Earnings watch: ${earningsDates.slice(0, 2).map(formatDate).join(", ")}`
+        }
+      : null,
+    newsCount
+      ? {
+          label: "News",
+          value: `${newsCount} recent article${newsCount === 1 ? "" : "s"} returned`
+        }
+      : null
+  ].filter(Boolean);
+}
+
+function EvidenceSummary({ items }) {
+  if (!items.length) return <p className="detail-copy">Hermes has not returned stock-specific evidence yet.</p>;
+  return (
+    <div className="evidence-list">
+      {items.map((item) => (
+        <div className="evidence-item" key={`${item.label}-${item.value}`}>
+          <span>{item.label}</span>
+          <strong>{item.value}</strong>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function QuoteReceipt({ quote }) {
   if (!quote) return null;
   const ok = quote.ok !== false && !quote.error && !quote.needs_configuration;
@@ -265,14 +341,36 @@ function QuoteReceipt({ quote }) {
   );
 }
 
-function StockChartView({ data, ticker, status }) {
-  return data?.length ? (
-    <React.Suspense fallback={<div className="chart-fallback" />}>
-      <InteractiveStockChart chartData={data} ticker={ticker} />
-    </React.Suspense>
-  ) : (
-    <div className="chart-fallback chart-state">
-      {status === "loading" ? "Loading Yahoo chart..." : "Chart unavailable from Yahoo."}
+function ChartRangeControl({ range, onRangeChange }) {
+  return (
+    <div className="chart-range-control" aria-label="Chart range">
+      {chartRanges.map((item) => (
+        <button
+          key={item.value}
+          className={range === item.value ? "active" : ""}
+          type="button"
+          onClick={() => onRangeChange(item.value)}
+        >
+          {item.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function StockChartView({ data, ticker, status, range, onRangeChange }) {
+  return (
+    <div className="chart-shell">
+      <ChartRangeControl range={range} onRangeChange={onRangeChange} />
+      {data?.length ? (
+        <React.Suspense fallback={<div className="chart-fallback" />}>
+          <InteractiveStockChart chartData={data} ticker={ticker} range={range} />
+        </React.Suspense>
+      ) : (
+        <div className="chart-fallback chart-state">
+          {status === "loading" ? "Loading Yahoo chart..." : "Chart unavailable from Yahoo."}
+        </div>
+      )}
     </div>
   );
 }
@@ -299,6 +397,7 @@ function ResearchTabs({ stock, hermesOutput, activeTab, setActiveTab, backend })
     news,
     pipeline: intel?.pipeline
   };
+  const evidenceItems = buildEvidenceItems({ stock, recommendation, price, filing, markets, calendar, news, officialExplorer });
   const tabs = [
     { id: "overview", label: "Overview" },
     { id: "markets", label: "Markets", count: markets.length },
@@ -334,9 +433,7 @@ function ResearchTabs({ stock, hermesOutput, activeTab, setActiveTab, backend })
               <DetailMetric label="Contract" value={shortAddress(stock.address)} />
               <DetailMetric label="Explorer" value={recommendation?.evidence?.explorer_confirmed || officialExplorer ? "confirmed" : "not confirmed"} />
             </div>
-            <p className="detail-copy">
-              {recommendation?.rationale || hermesOutput?.reply || "Hermes has not returned stock-specific rationale yet."}
-            </p>
+            <EvidenceSummary items={evidenceItems} />
             {recommendation?.user_action ? <p className="detail-action">{recommendation.user_action}</p> : null}
             <div className="source-links compact-links">
               <button type="button" onClick={() => navigator.clipboard?.writeText(stock.address)}>
@@ -458,6 +555,8 @@ async function readJsonResponse(response) {
 
 function decorateStock(item, index, recommendation, price) {
   const presentation = stockPresentation.find((stock) => stock.symbol === item.symbol) || stockPresentation[index % stockPresentation.length] || {};
+  const evidence = recommendation?.evidence || {};
+  const pricingText = kalshiPricingText(evidence.market_pricing);
   return {
     ...item,
     logoText: presentation.logoText || item.symbol.slice(0, 2),
@@ -466,9 +565,12 @@ function decorateStock(item, index, recommendation, price) {
     logoFg: presentation.logoFg || "#202621",
     score: recommendation?.confidence || 0,
     bullets: [
-      recommendation?.reason,
-      recommendation?.next_step,
-      price?.ok && price.close ? `Public quote close ${price.close}${price.date ? ` on ${price.date}` : ""}.` : null
+      recommendation ? `${recommendation.action} setup at ${recommendation.confidence}% confidence.` : null,
+      evidence.official_contract ? `Route uses official contract ${shortAddress(evidence.official_contract)} on Robinhood Chain.` : null,
+      price?.ok && price.close ? `Price: ${formatMoney(price.close)} close${price.date ? ` on ${formatDate(price.date)}` : ""}${price.volume ? `, ${formatCompact(price.volume)} volume` : ""}.` : null,
+      evidence.latest_filing ? `SEC: ${evidence.latest_filing.form}${evidence.latest_filing.filing_date ? ` filed ${formatDate(evidence.latest_filing.filing_date)}` : ""}.` : null,
+      evidence.kalshi_match_count ? `Kalshi: ${evidence.kalshi_match_count} matching market${evidence.kalshi_match_count === 1 ? "" : "s"}${pricingText ? `; ${pricingText}` : ""}.` : null,
+      recommendation?.user_action || null
     ].filter(Boolean)
   };
 }
@@ -476,6 +578,17 @@ function decorateStock(item, index, recommendation, price) {
 function HermesOutputBar({ stock, hermesOutput }) {
   const score = Math.max(0, Math.min(stock.score || 0, 100));
   const decision = hermesOutput?.hermes_decision?.stocks?.find((item) => item.symbol === stock.symbol);
+  const recommendation = hermesOutput?.data?.recommendations?.find((item) => item.symbol === stock.symbol);
+  const evidenceItems = buildEvidenceItems({
+    stock,
+    recommendation,
+    price: decision?.price,
+    filing: decision?.latest_filing ? { latest_material: decision.latest_filing } : null,
+    markets: [],
+    calendar: null,
+    news: null,
+    officialExplorer: null
+  });
   const stance = decision?.action || (score >= 72 ? "WATCH" : score >= 64 ? "WATCH" : "NO_BUY");
   return (
     <div className="cn-card score-card">
@@ -491,7 +604,9 @@ function HermesOutputBar({ stock, hermesOutput }) {
           <div style={{ width: `${decision?.confidence || score}%` }}></div>
         </div>
         <div className="score-note">
-          {decision?.reason || hermesOutput?.reply || `${stock.symbol} selected. Contract is ready for Robinhood testnet quote prep.`}
+          {evidenceItems.length
+            ? evidenceItems.slice(0, 3).map((item) => `${item.label}: ${item.value}`).join("  ")
+            : hermesOutput?.reply || `${stock.symbol} selected. Contract is ready for Robinhood testnet quote prep.`}
         </div>
       </div>
     </div>
@@ -512,6 +627,7 @@ function App() {
   const [hermesOutput, setHermesOutput] = React.useState(null);
   const [charts, setCharts] = React.useState({});
   const [chartStatus, setChartStatus] = React.useState("idle");
+  const [chartRange, setChartRange] = React.useState("3mo");
   const [quoteResult, setQuoteResult] = React.useState(null);
   const [activeInsightTab, setActiveInsightTab] = React.useState("overview");
 
@@ -524,7 +640,7 @@ function App() {
   const estimatedOutput = stock && amountNumber > 0 ? (amountNumber / Math.max(stock.score, 1)).toFixed(6) : "0";
   const selectedChartData = stock ? charts[stock.symbol] || [] : [];
 
-  const loadYahooCharts = React.useCallback(async (symbols) => {
+  const loadYahooCharts = React.useCallback(async (symbols, range) => {
     if (!symbols.length) {
       setCharts({});
       setChartStatus("idle");
@@ -532,7 +648,12 @@ function App() {
     }
     setChartStatus("loading");
     try {
-      const res = await fetch(`/api/stocks/chart?symbols=${encodeURIComponent(symbols.join(","))}`);
+      const params = new URLSearchParams({
+        symbols: symbols.join(","),
+        range,
+        interval: "1d"
+      });
+      const res = await fetch(`/api/stocks/chart?${params.toString()}`);
       const payload = await readJsonResponse(res);
       const entries = (payload?.charts || [])
         .filter((chart) => chart.ok && chart.data?.length)
@@ -609,8 +730,8 @@ function App() {
   }, []);
 
   React.useEffect(() => {
-    loadYahooCharts(stocks.map((item) => item.symbol));
-  }, [loadYahooCharts, stocks]);
+    loadYahooCharts(stocks.map((item) => item.symbol), chartRange);
+  }, [chartRange, loadYahooCharts, stocks]);
 
   React.useEffect(() => {
     if (!stock || !payToken) {
@@ -820,7 +941,7 @@ function App() {
               </div>
               </div>
             <div className="detail-stack">
-              <StockChartView data={selectedChartData} ticker={stock.symbol} status={chartStatus} />
+              <StockChartView data={selectedChartData} ticker={stock.symbol} status={chartStatus} range={chartRange} onRangeChange={setChartRange} />
               <HermesOutputBar stock={stock} hermesOutput={hermesOutput} />
               <div className="cn-card">
                 <div className="cn-card-content flex flex-col gap-3">

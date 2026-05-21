@@ -858,6 +858,10 @@ select {
 .stock-chart-card-header {
   border-bottom: 1px solid var(--border);
   padding: 20px 24px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
 }
 
 .stock-chart-card-title {
@@ -871,6 +875,68 @@ select {
   color: var(--muted-foreground);
   font-size: 13px;
   font-weight: 800;
+}
+
+.chart-shell {
+  position: relative;
+  display: grid;
+  gap: 8px;
+}
+
+.chart-range-control {
+  justify-self: end;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.74);
+  padding: 3px;
+  display: inline-flex;
+  gap: 3px;
+}
+
+.chart-range-control button {
+  min-width: 42px;
+  min-height: 30px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  font-weight: 950;
+}
+
+.chart-range-control button.active {
+  background: #ffffff;
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+
+.chart-readout {
+  min-width: 116px;
+  display: grid;
+  justify-items: end;
+  gap: 4px;
+  text-align: right;
+}
+
+.chart-readout strong {
+  color: var(--foreground);
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.chart-readout span {
+  font-size: 12px;
+  font-weight: 900;
+  white-space: nowrap;
+}
+
+.chart-readout .up {
+  color: var(--primary);
+}
+
+.chart-readout .down {
+  color: var(--red);
 }
 
 .stock-chart-card-content {
@@ -889,7 +955,7 @@ select {
 .interactive-chart-frame,
 .interactive-chart-container {
   width: 100%;
-  height: 190px;
+  height: 230px;
 }
 
 .stock-chart-container {
@@ -1554,6 +1620,35 @@ select {
   line-height: 1.5;
 }
 
+.evidence-list {
+  display: grid;
+  gap: 8px;
+}
+
+.evidence-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #ffffff;
+  padding: 10px 11px;
+  display: grid;
+  gap: 5px;
+}
+
+.evidence-item span {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.evidence-item strong {
+  color: var(--foreground);
+  font-size: 13px;
+  font-weight: 900;
+  line-height: 1.4;
+}
+
 .detail-action {
   border-left: 2px solid var(--primary);
   padding-left: 10px;
@@ -1727,6 +1822,16 @@ select {
 
   .insight-tabs button {
     min-width: 84px;
+  }
+
+  .stock-chart-card-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .chart-readout {
+    justify-items: start;
+    text-align: left;
   }
 
 }

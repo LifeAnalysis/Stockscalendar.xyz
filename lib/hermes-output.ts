@@ -11,16 +11,46 @@ type OpenRouterResponse = {
   error?: unknown;
 };
 
+type OpenRouterChatResult = {
+  configured: boolean;
+  ok: boolean;
+  model: string;
+  reply: string | null;
+  status?: number;
+  error?: string;
+};
+
 export const DEFAULT_HERMES_OUTPUT_PROMPT =
   "For Tesla, Amazon, Palantir, Netflix, and AMD, should I prepare any Robinhood Chain stock-token quote right now? Use all stock feeds and Kalshi only as supporting evidence.";
+
+function formatMoney(value?: number) {
+  if (!Number.isFinite(value)) return "n/a";
+  return `$${Number(value).toFixed(Number(value) >= 100 ? 2 : 4)}`;
+}
+
+function formatVolume(value?: number) {
+  if (!Number.isFinite(value)) return "n/a";
+  if (Number(value) >= 1_000_000) return `${(Number(value) / 1_000_000).toFixed(1)}M`;
+  if (Number(value) >= 1_000) return `${(Number(value) / 1_000).toFixed(1)}K`;
+  return String(value);
+}
 
 function fallbackReply(intel: Awaited<ReturnType<typeof buildStockIntel>>) {
   const decision = intel.hermes_decision;
   const degraded = intel.pipeline.degraded_sources.length ? ` Degraded sources: ${intel.pipeline.degraded_sources.join(", ")}.` : "";
   const recommendations = decision.stocks
     .map((row) => {
-      const pricingNote = row.yes_no_prices ? "" : " No clean YES/NO stock-market price.";
-      return `- ${row.symbol}: ${row.action}. ${row.reason}${pricingNote}`;
+      const route = `official route ready`;
+      const price = row.price?.close
+        ? `price ${formatMoney(row.price.close)} close${row.price.date ? ` on ${row.price.date}` : ""}${row.price.volume ? `, ${formatVolume(row.price.volume)} volume` : ""}`
+        : "price source unavailable";
+      const filing = row.latest_filing
+        ? `SEC ${row.latest_filing.form}${row.latest_filing.filing_date ? ` filed ${row.latest_filing.filing_date}` : ""}`
+        : "no latest SEC filing returned";
+      const pricing = row.yes_no_prices
+        ? `Kalshi ${row.yes_no_prices.yes_bid || "n/a"}/${row.yes_no_prices.yes_ask || "n/a"} YES, ${row.yes_no_prices.no_bid || "n/a"}/${row.yes_no_prices.no_ask || "n/a"} NO`
+        : "no clean YES/NO market price";
+      return `- ${row.symbol}: ${row.action} (${row.confidence}%). ${route}; ${price}; ${filing}; ${pricing}. Next: ${row.user_action}`;
     })
     .join("\n");
   const searched = intel.kalshi.searched_terms?.length ? ` Filtered Kalshi terms: ${intel.kalshi.searched_terms.join(", ")}.` : "";
@@ -34,11 +64,23 @@ function fallbackReply(intel: Awaited<ReturnType<typeof buildStockIntel>>) {
   ].join("\n");
 }
 
-async function askHermes(message: string, intel: Awaited<ReturnType<typeof buildStockIntel>>) {
-  const apiKey = env("OPENROUTER_API_KEY");
-  if (!apiKey) return null;
+function safeOpenRouterError(response: OpenRouterResponse | undefined): string | undefined {
+  if (!response?.error) return undefined;
+  if (typeof response.error === "string") return response.error.slice(0, 240);
+  if (typeof response.error === "object" && response.error && "message" in response.error) {
+    const message = (response.error as { message?: unknown }).message;
+    return typeof message === "string" ? message.slice(0, 240) : undefined;
+  }
+  return "openrouter_error";
+}
 
+async function askHermes(message: string, intel: Awaited<ReturnType<typeof buildStockIntel>>): Promise<OpenRouterChatResult> {
+  const apiKey = env("OPENROUTER_API_KEY");
   const model = env("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash");
+  if (!apiKey) {
+    return { configured: false, ok: false, model, reply: null, error: "OPENROUTER_API_KEY is not configured" };
+  }
+
   const maxTokens = Number(env("OPENROUTER_MAX_TOKENS", "1200"));
   const response = await fetchJson<OpenRouterResponse>("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
@@ -80,20 +122,36 @@ async function askHermes(message: string, intel: Awaited<ReturnType<typeof build
     }
   });
 
-  return response.ok ? response.data?.choices?.[0]?.message?.content?.trim() || null : null;
+  const reply = response.data?.choices?.[0]?.message?.content?.trim() || null;
+  if (response.ok && reply) return { configured: true, ok: true, model, reply, status: response.status };
+  return {
+    configured: true,
+    ok: false,
+    model,
+    reply: null,
+    status: response.status,
+    error: safeOpenRouterError(response.data) || (response.ok ? "openrouter_empty_response" : "openrouter_request_failed")
+  };
 }
 
 export async function buildHermesOutput(message = DEFAULT_HERMES_OUTPUT_PROMPT) {
   const intel = await buildStockIntel();
-  const openrouterConfigured = Boolean(env("OPENROUTER_API_KEY"));
-  const reply = (await askHermes(message, intel)) || fallbackReply(intel);
+  const chat = await askHermes(message, intel);
+  const reply = chat.reply || fallbackReply(intel);
   return {
     reply,
     hermes_decision: intel.hermes_decision,
     data: intel,
     tool_trace: [
       { name: "buildStockIntel", ok: intel.ok, degraded_sources: intel.pipeline.degraded_sources },
-      { name: "openrouter_chat", ok: openrouterConfigured }
+      {
+        name: "openrouter_chat",
+        ok: chat.ok,
+        configured: chat.configured,
+        model: chat.model,
+        status: chat.status,
+        error: chat.error
+      }
     ]
   };
 }
