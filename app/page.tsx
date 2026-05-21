@@ -6,9 +6,19 @@ type Stock = {
   symbol: string;
   name: string;
   address: string;
+  chainId?: number;
+  kind?: "stock" | "payment";
   aliases: string[];
   logoUrl?: string;
   brandColor?: string;
+};
+
+type StockCatalog = {
+  ok: boolean;
+  source: string;
+  chainId: number;
+  stocks: Stock[];
+  payment_tokens: Stock[];
 };
 
 type Market = {
@@ -27,13 +37,35 @@ type Market = {
 type Recommendation = {
   symbol: string;
   recommendation: "prepare_quote" | "watch" | "wait_for_cleaner_data";
+  action: "BUY" | "WATCH" | "NO_BUY" | "CONFIG_NEEDED";
   label: string;
   confidence: number;
   rationale: string;
+  user_action: string;
   evidence: {
     official_contract: string;
     kalshi_match_count: number;
     top_kalshi_market?: Market;
+    market_pricing?: {
+      yes_bid?: string;
+      yes_ask?: string;
+      no_bid?: string;
+      no_ask?: string;
+      spread_note: string;
+    };
+    price_snapshot?: {
+      close?: number;
+      date?: string;
+      volume?: number;
+      source: string;
+    };
+    latest_filing?: {
+      form: string;
+      filing_date?: string;
+      document_url?: string;
+    };
+    news_count: number;
+    top_news: Array<{ title: string; url?: string; domain?: string }>;
     calendar_ok: boolean;
     earnings_dates: string[];
     explorer_confirmed: boolean;
@@ -59,7 +91,7 @@ type Intel = {
     ok: boolean;
     required_ok: boolean;
     degraded_sources: string[];
-    checks: Array<{ name: string; ok: boolean; required: boolean; source: string; records: number; error?: string }>;
+    checks: Array<{ name: string; ok: boolean; required: boolean; source: string; note?: string; records: number; error?: string }>;
   };
   robinhood_chain: {
     stocks: Stock[];
@@ -76,8 +108,19 @@ type Intel = {
     tokens: ExplorerToken[];
   };
   kalshi: {
+    source: string;
+    source_note: string;
+    search_method: string;
+    searched_terms: string[];
     scanned_markets: number;
     stocks: Array<{ stock: Stock; match_count: number; markets: Market[] }>;
+  };
+  stock_signals: {
+    ok: boolean;
+    source_note: string;
+    prices: Array<{ symbol: string; ok: boolean; close?: number; date?: string; volume?: number; source: string; error?: string }>;
+    filings: Array<{ symbol: string; ok: boolean; recent_material_count: number; recent_forms: string[]; error?: string }>;
+    news: Array<{ symbol: string; ok: boolean; article_count: number; top_articles: Array<{ title: string; url?: string; domain?: string }> }>;
   };
   calendars: Array<{
     symbol: string;
@@ -88,6 +131,13 @@ type Intel = {
     public_links: string[];
   }>;
   recommendations: Recommendation[];
+  hermes_decision: {
+    verdict: string;
+    summary: string;
+    source_note: string;
+    user_action: string;
+    action_counts: Record<"BUY" | "WATCH" | "NO_BUY" | "CONFIG_NEEDED", number>;
+  };
   agent_context: unknown;
 };
 
@@ -104,7 +154,42 @@ type Health = {
   };
 };
 
+type ChainStatus = {
+  ok: boolean;
+  latestBlock?: number;
+  chain?: {
+    chainId: number;
+    observedChainId?: number | null;
+    explorer: string;
+    rpc_configured: boolean;
+  };
+};
+
+type HermesOutput = {
+  reply?: string;
+  hermes_decision?: Intel["hermes_decision"];
+  data?: Intel;
+  tool_trace?: Array<{ name: string; ok: boolean; degraded_sources?: string[] }>;
+};
+
 const shortAddress = (value: string) => `${value.slice(0, 6)}...${value.slice(-4)}`;
+
+const formatPrice = (value?: number) =>
+  typeof value === "number"
+    ? new Intl.NumberFormat("en", {
+        style: "currency",
+        currency: "USD",
+        maximumFractionDigits: value >= 100 ? 2 : 4
+      }).format(value)
+    : "n/a";
+
+const formatVolume = (value?: number) =>
+  typeof value === "number"
+    ? new Intl.NumberFormat("en", {
+        notation: "compact",
+        maximumFractionDigits: 1
+      }).format(value)
+    : "n/a";
 
 const formatDate = (value?: string) => {
   if (!value) return "n/a";
@@ -147,31 +232,65 @@ function StatusDot({ label, active, detail }: { label: string; active: boolean; 
 
 export default function Page() {
   const [health, setHealth] = useState<Health | null>(null);
+  const [chainStatus, setChainStatus] = useState<ChainStatus | null>(null);
+  const [stockCatalog, setStockCatalog] = useState<StockCatalog | null>(null);
   const [intel, setIntel] = useState<Intel | null>(null);
   const [selected, setSelected] = useState("TSLA");
   const [payToken, setPayToken] = useState("USDG");
-  const [action, setAction] = useState<"buy" | "sell">("buy");
+  const [action, setAction] = useState<"buy" | "sell" | "swap">("buy");
+  const [sourceAsset, setSourceAsset] = useState("");
+  const [targetAsset, setTargetAsset] = useState("");
+  const [slippage, setSlippage] = useState("0.5");
   const [amount, setAmount] = useState("");
   const [wallet, setWallet] = useState("");
   const [tradeResult, setTradeResult] = useState<unknown>(null);
   const [tradeError, setTradeError] = useState("");
+  const [hermesOutput, setHermesOutput] = useState<HermesOutput | null>(null);
+  const [hermesOutputError, setHermesOutputError] = useState("");
   const [loading, setLoading] = useState(false);
   const [quoting, setQuoting] = useState(false);
 
   async function refresh() {
     setLoading(true);
     try {
-      const [healthRes, intelRes] = await Promise.all([fetch("/api/health"), fetch("/api/robinhood/intel")]);
+      const [healthRes, statusRes, stocksRes, outputRes] = await Promise.all([
+        fetch("/api/health"),
+        fetch("/api/robinhood/status"),
+        fetch("/api/robinhood/stocks"),
+        fetch("/api/hermes/output")
+      ]);
       const nextHealth = (await healthRes.json()) as Health;
-      const nextIntel = (await intelRes.json()) as Intel;
+      const nextStatus = (await statusRes.json()) as ChainStatus;
+      const nextCatalog = (await stocksRes.json()) as StockCatalog;
+      const nextOutput = (await outputRes.json()) as HermesOutput;
+      const nextIntel = nextOutput.data;
       setHealth(nextHealth);
-      setIntel(nextIntel);
-      if (!nextIntel.robinhood_chain.stocks.some((stock) => stock.symbol === selected)) {
-        setSelected(nextIntel.robinhood_chain.stocks[0]?.symbol || "TSLA");
+      setChainStatus(nextStatus);
+      setStockCatalog(nextCatalog);
+      setIntel(nextIntel || null);
+      setHermesOutput(nextOutput);
+      setHermesOutputError("");
+      const nextStocks = nextCatalog.stocks.length ? nextCatalog.stocks : nextIntel?.robinhood_chain.stocks || [];
+      const nextPaymentTokens = nextCatalog.payment_tokens.length
+        ? nextCatalog.payment_tokens
+        : nextIntel?.robinhood_chain.payment_tokens || [];
+      const nextAssets = [...nextPaymentTokens, ...nextStocks];
+      if (!nextStocks.some((stock) => stock.symbol === selected)) {
+        setSelected(nextStocks[0]?.symbol || "TSLA");
       }
-      if (!nextIntel.robinhood_chain.payment_tokens.some((token) => token.symbol === payToken)) {
-        setPayToken(nextIntel.robinhood_chain.payment_tokens[0]?.symbol || "USDG");
+      if (!nextPaymentTokens.some((token) => token.symbol === payToken)) {
+        setPayToken(nextPaymentTokens[0]?.symbol || "USDG");
       }
+      setSourceAsset((current) =>
+        nextAssets.some((asset) => asset.address === current)
+          ? current
+          : nextPaymentTokens[0]?.address || nextStocks[0]?.address || ""
+      );
+      setTargetAsset((current) =>
+        nextAssets.some((asset) => asset.address === current) ? current : nextStocks[0]?.address || ""
+      );
+    } catch (error) {
+      setHermesOutputError(error instanceof Error ? error.message : "Hermes output failed");
     } finally {
       setLoading(false);
     }
@@ -182,13 +301,27 @@ export default function Page() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const selectedStock = useMemo(
-    () => intel?.robinhood_chain.stocks.find((stock) => stock.symbol === selected),
-    [intel, selected]
+  const stockUniverse = useMemo(
+    () => (stockCatalog?.stocks.length ? stockCatalog.stocks : intel?.robinhood_chain.stocks || []),
+    [intel, stockCatalog]
   );
-  const selectedPayToken = useMemo(
-    () => intel?.robinhood_chain.payment_tokens.find((token) => token.symbol === payToken),
-    [intel, payToken]
+  const paymentUniverse = useMemo(
+    () =>
+      stockCatalog?.payment_tokens.length
+        ? stockCatalog.payment_tokens
+        : intel?.robinhood_chain.payment_tokens || [],
+    [intel, stockCatalog]
+  );
+  const allAssets = useMemo(() => [...paymentUniverse, ...stockUniverse], [paymentUniverse, stockUniverse]);
+  const selectedStock = useMemo(() => stockUniverse.find((stock) => stock.symbol === selected), [selected, stockUniverse]);
+  const selectedPayToken = useMemo(() => paymentUniverse.find((token) => token.symbol === payToken), [payToken, paymentUniverse]);
+  const selectedSourceAsset = useMemo(
+    () => allAssets.find((asset) => asset.address === sourceAsset),
+    [allAssets, sourceAsset]
+  );
+  const selectedTargetAsset = useMemo(
+    () => allAssets.find((asset) => asset.address === targetAsset),
+    [allAssets, targetAsset]
   );
   const selectedMarkets = useMemo(
     () => intel?.kalshi.stocks.find((row) => row.stock.symbol === selected)?.markets || [],
@@ -207,28 +340,39 @@ export default function Page() {
     () => intel?.explorer_discovery?.tokens.filter((token) => !token.routed_by_agent).slice(0, 12) || [],
     [intel]
   );
-  const quoteDisabled = !selectedStock || !selectedPayToken || !amount.trim() || !wallet.trim() || quoting;
+  const quoteDisabled =
+    !amount.trim() ||
+    !wallet.trim() ||
+    quoting ||
+    (action === "swap"
+      ? !selectedSourceAsset || !selectedTargetAsset || selectedSourceAsset.address === selectedTargetAsset.address
+      : !selectedStock || !selectedPayToken);
   const tradePreview = useMemo(() => {
+    if (action === "swap") {
+      if (!selectedSourceAsset || !selectedTargetAsset) return null;
+      return { source: selectedSourceAsset, target: selectedTargetAsset };
+    }
     if (!selectedStock || !selectedPayToken) return null;
     const source = action === "sell" ? selectedStock : selectedPayToken;
     const target = action === "sell" ? selectedPayToken : selectedStock;
     return { source, target };
-  }, [action, selectedPayToken, selectedStock]);
+  }, [action, selectedPayToken, selectedSourceAsset, selectedStock, selectedTargetAsset]);
 
   async function prepareTrade() {
-    if (!selectedStock || !selectedPayToken) return;
+    if (!tradePreview) return;
     setQuoting(true);
     setTradeError("");
     setTradeResult(null);
-    const isSell = action === "sell";
+    const slippagePercentage = Number(slippage);
     const payload = {
       action,
-      source_asset: isSell ? selectedStock.address : selectedPayToken.address,
-      target_asset: isSell ? selectedPayToken.address : selectedStock.address,
+      source_asset: tradePreview.source.address,
+      target_asset: tradePreview.target.address,
       amount,
       wallet_address: wallet,
       provider: "auto",
-      strategy: `Hermes stock rail from ${selected} dashboard`
+      slippagePercentage: Number.isFinite(slippagePercentage) ? slippagePercentage : 0.5,
+      strategy: `Hermes ${action} rail from dashboard`
     };
     try {
       const res = await fetch("/api/robinhood/trade", {
@@ -251,8 +395,8 @@ export default function Page() {
           <div className="eyebrow">Hermes Robinhood Chain</div>
           <h1 id="page-title">Stock-token command center</h1>
           <p>
-            Prepare wallet-signed stock-token routes, inspect the active token universe, and compare each symbol against
-            Kalshi and calendar context.
+            Review Hermes stock-token outputs, inspect every fetched data source, and prepare wallet-signed
+            Robinhood Chain routes from the same API payloads.
           </p>
         </div>
         <div className="hero-actions">
@@ -270,8 +414,8 @@ export default function Page() {
       <section className="readiness" aria-label="System readiness">
         <StatusDot
           label="Robinhood RPC"
-          active={Boolean(health?.robinhood_chain.rpc_configured)}
-          detail={health?.robinhood_chain.rpc_configured ? `chain ${health.robinhood_chain.chainId}` : "env needed"}
+          active={Boolean(chainStatus?.ok)}
+          detail={chainStatus?.ok ? `block ${chainStatus.latestBlock || "live"}` : "env needed"}
         />
         <StatusDot
           label="Nuvolari"
@@ -282,6 +426,11 @@ export default function Page() {
           label="OpenRouter"
           active={Boolean(health?.openrouter_configured)}
           detail={health?.openrouter_configured ? health?.model || "configured" : "optional"}
+        />
+        <StatusDot
+          label="Stock API"
+          active={Boolean(stockCatalog?.ok)}
+          detail={stockCatalog?.ok ? `${stockCatalog.stocks.length} stocks` : "loading"}
         />
         <div className="readiness-note">
           <span>Boundary</span>
@@ -296,12 +445,13 @@ export default function Page() {
               <div className="eyebrow">Stock universe</div>
               <h2 id="asset-title">Choose a rail</h2>
             </div>
-            <span className="count">{intel?.robinhood_chain.stocks.length || 0} tokens</span>
+            <span className="count">{stockUniverse.length} tokens</span>
           </div>
 
           <div className="stock-grid">
-            {intel?.robinhood_chain.stocks.map((stock) => {
+            {stockUniverse.map((stock) => {
               const recommendation = recommendationBySymbol.get(stock.symbol);
+              const price = recommendation?.evidence.price_snapshot;
               return (
                 <button
                   className={`stock-tile ${stock.symbol === selected ? "selected" : ""}`}
@@ -315,6 +465,10 @@ export default function Page() {
                   <span>
                     <strong>{stock.symbol}</strong>
                     <small>{stock.name}</small>
+                  </span>
+                  <span className="stock-price">
+                    <strong>{formatPrice(price?.close)}</strong>
+                    <small>{price?.date || "quote pending"}</small>
                   </span>
                   {recommendation ? (
                     <span className={`rec-chip ${recommendation.recommendation}`}>
@@ -344,16 +498,44 @@ export default function Page() {
             <button className={action === "sell" ? "active" : ""} type="button" onClick={() => setAction("sell")}>
               Sell
             </button>
+            <button className={action === "swap" ? "active" : ""} type="button" onClick={() => setAction("swap")}>
+              Swap
+            </button>
           </div>
 
-          <div className="field-group">
-            <label htmlFor="pay-token">Pay or receive token</label>
-            <select id="pay-token" value={payToken} onChange={(event) => setPayToken(event.target.value)}>
-              {intel?.robinhood_chain.payment_tokens.map((token) => (
-                <option key={token.symbol}>{token.symbol}</option>
-              ))}
-            </select>
-          </div>
+          {action === "swap" ? (
+            <div className="field-row">
+              <div className="field-group">
+                <label htmlFor="source-asset">Source asset</label>
+                <select id="source-asset" value={sourceAsset} onChange={(event) => setSourceAsset(event.target.value)}>
+                  {allAssets.map((asset) => (
+                    <option key={asset.address} value={asset.address}>
+                      {asset.symbol} · {asset.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field-group">
+                <label htmlFor="target-asset">Target asset</label>
+                <select id="target-asset" value={targetAsset} onChange={(event) => setTargetAsset(event.target.value)}>
+                  {allAssets.map((asset) => (
+                    <option key={asset.address} value={asset.address}>
+                      {asset.symbol} · {asset.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+          ) : (
+            <div className="field-group">
+              <label htmlFor="pay-token">{action === "buy" ? "Pay token" : "Receive token"}</label>
+              <select id="pay-token" value={payToken} onChange={(event) => setPayToken(event.target.value)}>
+                {paymentUniverse.map((token) => (
+                  <option key={token.symbol}>{token.symbol}</option>
+                ))}
+              </select>
+            </div>
+          )}
 
           <div className="field-row">
             <div className="field-group">
@@ -367,9 +549,20 @@ export default function Page() {
               />
             </div>
             <div className="field-group">
-              <label htmlFor="wallet">Wallet EOA</label>
-              <input id="wallet" value={wallet} onChange={(event) => setWallet(event.target.value)} placeholder="0x..." />
+              <label htmlFor="slippage">Slippage %</label>
+              <input
+                id="slippage"
+                inputMode="decimal"
+                value={slippage}
+                onChange={(event) => setSlippage(event.target.value)}
+                placeholder="0.5"
+              />
             </div>
+          </div>
+
+          <div className="field-group">
+            <label htmlFor="wallet">Wallet EOA</label>
+            <input id="wallet" value={wallet} onChange={(event) => setWallet(event.target.value)} placeholder="0x..." />
           </div>
 
           {tradePreview ? (
@@ -397,12 +590,33 @@ export default function Page() {
         </section>
       </div>
 
+      <section className="hermes-output-band" aria-label="Hermes output">
+        <div className="context-panel hermes-output-panel">
+          <div className="section-head">
+            <div>
+              <div className="eyebrow">Hermes output</div>
+              <h2>{hermesOutput?.hermes_decision?.verdict || intel?.hermes_decision.verdict || "Awaiting agent output"}</h2>
+            </div>
+            <span className="count">{health?.openrouter_configured ? "model" : "fallback"}</span>
+          </div>
+          {hermesOutputError ? <p className="inline-error">{hermesOutputError}</p> : null}
+          <pre className="result hermes-output">{hermesOutput?.reply || "Refresh data to generate Hermes output."}</pre>
+          <div className="tool-trace">
+            {(hermesOutput?.tool_trace || []).map((tool) => (
+              <span className={`trace-pill ${tool.ok ? "ok" : "degraded"}`} key={tool.name}>
+                {tool.name.replaceAll("_", " ")}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
       <section className="recommendation-band" aria-label="Hermes recommendations">
         <div className="context-panel recommendation-panel">
           <div className="section-head">
             <div>
-              <div className="eyebrow">Hermes recommendation</div>
-              <h2>{selected} execution posture</h2>
+              <div className="eyebrow">Hermes verdict</div>
+              <h2>{intel?.hermes_decision.verdict || `${selected} execution posture`}</h2>
             </div>
             {selectedRecommendation ? (
               <span className={`rec-chip ${selectedRecommendation.recommendation}`}>
@@ -413,7 +627,9 @@ export default function Page() {
 
           {selectedRecommendation ? (
             <div className="recommendation-detail">
+              {intel?.hermes_decision.summary ? <p>{intel.hermes_decision.summary}</p> : null}
               <p>{selectedRecommendation.rationale}</p>
+              <p className="action-line">{selectedRecommendation.user_action}</p>
               <div className="metric-grid">
                 <div>
                   <span>Contract</span>
@@ -430,6 +646,40 @@ export default function Page() {
                 <div>
                   <span>Explorer</span>
                   <strong>{selectedRecommendation.evidence.explorer_confirmed ? "confirmed" : "not confirmed"}</strong>
+                </div>
+              </div>
+              <div className="metric-grid evidence-grid">
+                <div>
+                  <span>Public quote</span>
+                  <strong>{formatPrice(selectedRecommendation.evidence.price_snapshot?.close)}</strong>
+                </div>
+                <div>
+                  <span>Quote date</span>
+                  <strong>{selectedRecommendation.evidence.price_snapshot?.date || "n/a"}</strong>
+                </div>
+                <div>
+                  <span>Volume</span>
+                  <strong>{formatVolume(selectedRecommendation.evidence.price_snapshot?.volume)}</strong>
+                </div>
+                <div>
+                  <span>SEC filing</span>
+                  <strong>{selectedRecommendation.evidence.latest_filing?.form || "n/a"}</strong>
+                </div>
+              </div>
+              <div className="market-price-grid">
+                <div>
+                  <span>YES bid / ask</span>
+                  <strong>
+                    {selectedRecommendation.evidence.market_pricing?.yes_bid || "n/a"} /{" "}
+                    {selectedRecommendation.evidence.market_pricing?.yes_ask || "n/a"}
+                  </strong>
+                </div>
+                <div>
+                  <span>NO bid / ask</span>
+                  <strong>
+                    {selectedRecommendation.evidence.market_pricing?.no_bid || "n/a"} /{" "}
+                    {selectedRecommendation.evidence.market_pricing?.no_ask || "n/a"}
+                  </strong>
                 </div>
               </div>
             </div>
@@ -458,7 +708,10 @@ export default function Page() {
                 onClick={() => setSelected(row.symbol)}
               >
                 <strong>{row.symbol}</strong>
-                <span>{row.label}</span>
+                <span>
+                  {row.action}
+                  <small>{formatPrice(row.evidence.price_snapshot?.close)}</small>
+                </span>
                 <b>{row.confidence}%</b>
               </button>
             ))}
@@ -471,10 +724,11 @@ export default function Page() {
           <div className="section-head">
             <div>
               <div className="eyebrow">Market context</div>
-              <h2>Kalshi matches</h2>
+              <h2>Public Kalshi matches</h2>
             </div>
             <span className="count">{selectedMarkets.length} found</span>
           </div>
+          {intel?.kalshi.source_note ? <p className="source-note">{intel.kalshi.source_note}</p> : null}
           <div className="market-list">
             {selectedMarkets.length ? (
               selectedMarkets.map((market) => (
@@ -507,7 +761,7 @@ export default function Page() {
             ) : (
               <div className="empty-state">
                 <strong>No clean market match for {selected}</strong>
-                <p>The matcher is avoiding weak sports, politics, and noisy cross-asset hits.</p>
+                <p>The public API feed was filtered locally, so noisy website search results are not promoted into a buy call.</p>
               </div>
             )}
           </div>
@@ -605,6 +859,7 @@ export default function Page() {
                 <div>
                   <strong>{check.name.replaceAll("_", " ")}</strong>
                   <span>{check.source}</span>
+                  {check.note ? <span>{check.note}</span> : null}
                 </div>
                 <div>
                   <span>{check.required ? "required" : "optional"}</span>
