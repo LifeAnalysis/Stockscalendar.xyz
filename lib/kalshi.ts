@@ -56,10 +56,14 @@ function marketText(market: KalshiMarket): string {
     .toLowerCase();
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 function scoreMarket(stock: RobinhoodToken, market: KalshiMarket): number {
   const text = marketText(market);
   let score = 0;
-  if (new RegExp(`\\b${stock.symbol.toLowerCase()}\\b`).test(text)) score += 8;
+  if (new RegExp(`\\b${escapeRegExp(stock.symbol.toLowerCase())}\\b`).test(text)) score += 8;
   for (const alias of stock.aliases) {
     if (text.includes(alias.toLowerCase())) score += alias === stock.symbol.toLowerCase() ? 4 : 3;
   }
@@ -74,7 +78,8 @@ function maxKalshiPages(): number {
 }
 
 export async function fetchKalshiMarkets(maxPages = maxKalshiPages()): Promise<{ ok: boolean; markets: KalshiMarket[]; error?: string; source: string }> {
-  const ttlMs = Number(env("KALSHI_MARKET_CACHE_SECONDS", "180")) * 1000;
+  const configuredTtl = Number(env("KALSHI_MARKET_CACHE_SECONDS", "180"));
+  const ttlMs = (Number.isFinite(configuredTtl) ? Math.max(0, configuredTtl) : 180) * 1000;
   if (marketCache && Date.now() - marketCache.ts < ttlMs) {
     return { ok: true, markets: marketCache.value, source: "cache" };
   }
@@ -133,6 +138,7 @@ export async function matchStockMarkets(stocks = robinhoodStockTokens) {
   return {
     ok: feed.ok,
     source: feed.source,
+    error: feed.error,
     scanned_markets: feed.markets.length,
     stocks: bySymbol
   };

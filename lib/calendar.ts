@@ -27,7 +27,9 @@ export async function fetchPublicCalendar(stock: RobinhoodToken) {
   return {
     symbol: stock.symbol,
     ok: yahoo.ok && Boolean(earnings),
+    status: yahoo.status,
     source: yahoo.ok ? "Yahoo Finance calendarEvents" : "Yahoo Finance calendarEvents unavailable",
+    error: yahoo.ok ? undefined : yahoo.error,
     earnings_dates: earningsDate,
     estimates: {
       earnings_average: earnings?.earningsAverage?.fmt,

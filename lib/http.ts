@@ -34,7 +34,15 @@ export async function fetchJson<T = unknown>(url: string, options: JsonOptions =
     } catch {
       data = { text } as T;
     }
-    return { ok: res.ok, status: res.status, data };
+    let error: string | undefined;
+    if (!res.ok) {
+      if (data && typeof data === "object" && "error" in data) {
+        error = typeof data.error === "string" ? data.error : JSON.stringify(data.error);
+      } else {
+        error = `${res.status} ${res.statusText}`.trim();
+      }
+    }
+    return { ok: res.ok, status: res.status, data, error };
   } catch (error) {
     return { ok: false, status: 0, error: error instanceof Error ? error.message : String(error) };
   } finally {

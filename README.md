@@ -1,6 +1,6 @@
 # Hermes Robinhood Chain
 
-Next.js command center for Robinhood Chain stock tokens, Kalshi market context, public event links, and Nuvolari/Arqsy quote preparation.
+Next.js command center for Robinhood Chain stock tokens, Kalshi market context, public event links, and Nuvolari quote preparation.
 
 The app does not sign transactions. It prepares atomic stock buy/sell/rotate quotes only after exact token contracts, wallet EOA, and integer base-unit amount are present.
 
@@ -13,9 +13,11 @@ app/api/robinhood/status/route.ts  Robinhood Chain RPC status
 app/api/robinhood/stocks/route.ts  Stock token dictionary
 app/api/robinhood/intel/route.ts   Robinhood + Kalshi + calendar aggregate
 app/api/robinhood/trade/route.ts   Atomic stock quote preparation
+app/api/chat/route.ts              Hermes chat fed by the same normalized intel payload
 lib/robinhood.ts                   Official stock/payment token dictionary and trade rail
 lib/kalshi.ts                      Kalshi public market fetch + matcher
 lib/calendar.ts                    Public earnings/event lookup
+lib/intel.ts                       Pipeline checks and compact agent context
 ```
 
 ## Environment
@@ -38,11 +40,6 @@ ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
 ROBINHOOD_CHAIN_ID=46630
 ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
 ROBINHOOD_STOCK_PROVIDER=nuvolari
-
-ARQSY_API_BASE_URL=
-ARQSY_API_KEY=
-ARQSY_SECRET_API_KEY=
-ARQSY_STOCK_TRADE_PATH=/v1/stocks/trade
 ```
 
 ## Source Of Truth
@@ -50,6 +47,12 @@ ARQSY_STOCK_TRADE_PATH=/v1/stocks/trade
 Robinhood stock tokens are currently the official testnet contracts from `https://docs.robinhood.com/chain/contracts/`: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`, plus payment tokens `WETH` and `USDG`.
 
 Kalshi market data uses the public Trade API. Calendar data uses public finance endpoints where available and always returns fallback public links for manual inspection.
+
+## Data Pipeline
+
+`/api/robinhood/intel` is the aggregate source for Hermes. It returns explicit pipeline checks for Robinhood Chain token contracts, Kalshi public markets, and public event calendars, plus a compact `agent_context` object consumed by `/api/chat`.
+
+`/api/chat` passes that context to OpenRouter when `OPENROUTER_API_KEY` is configured. Without OpenRouter, it still returns a deterministic pipeline-aware response and includes the raw intel payload for inspection.
 
 ## Development
 
