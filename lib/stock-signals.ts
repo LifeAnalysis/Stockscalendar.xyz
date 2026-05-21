@@ -39,6 +39,28 @@ type GdeltResponse = {
   }>;
 };
 
+type YahooChartResponse = {
+  chart?: {
+    result?: Array<{
+      meta?: {
+        regularMarketPrice?: number;
+        previousClose?: number;
+      };
+      timestamp?: number[];
+      indicators?: {
+        quote?: Array<{
+          open?: Array<number | null>;
+          high?: Array<number | null>;
+          low?: Array<number | null>;
+          close?: Array<number | null>;
+          volume?: Array<number | null>;
+        }>;
+      };
+    }>;
+    error?: unknown;
+  };
+};
+
 export type PriceSnapshot = {
   symbol: string;
   ok: boolean;
@@ -96,6 +118,7 @@ export type StockSignals = {
 };
 
 const STOOQ_SOURCE = "https://stooq.com/q/l/";
+const YAHOO_CHART_SOURCE = "https://query1.finance.yahoo.com/v8/finance/chart/";
 const SEC_SOURCE = "https://data.sec.gov/submissions/";
 const GDELT_SOURCE = "https://api.gdeltproject.org/api/v2/doc/doc";
 
@@ -127,24 +150,69 @@ async function fetchPrice(stock: RobinhoodToken): Promise<PriceSnapshot> {
   const symbol = `${stock.symbol.toLowerCase()}.us`;
   const url = `${STOOQ_SOURCE}?s=${encodeURIComponent(symbol)}&f=sd2t2ohlcv&h&e=csv`;
   const response = await fetchText(url, { timeoutMs: Number(env("STOOQ_TIMEOUT_MS", "6000")) || 6000 });
-  if (!response.ok) {
-    return { symbol: stock.symbol, ok: false, source: STOOQ_SOURCE, error: response.error || "stooq_request_failed" };
+  if (response.ok) {
+    const row = parseCsv(response.text);
+    if (row && row.Close !== "N/D") {
+      return {
+        symbol: stock.symbol,
+        ok: true,
+        source: STOOQ_SOURCE,
+        date: row.Date,
+        time: row.Time,
+        open: parseNumber(row.Open),
+        high: parseNumber(row.High),
+        low: parseNumber(row.Low),
+        close: parseNumber(row.Close),
+        volume: parseNumber(row.Volume)
+      };
+    }
   }
-  const row = parseCsv(response.text);
-  if (!row || row.Close === "N/D") {
-    return { symbol: stock.symbol, ok: false, source: STOOQ_SOURCE, error: "stooq_quote_unavailable" };
+
+  return fetchYahooPrice(stock, response.error || "stooq_quote_unavailable");
+}
+
+function lastNumber(values?: Array<number | null>): number | undefined {
+  if (!values?.length) return undefined;
+  for (let index = values.length - 1; index >= 0; index -= 1) {
+    const value = values[index];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
   }
+  return undefined;
+}
+
+function dateFromUnix(value?: number): string | undefined {
+  if (!value) return undefined;
+  return new Date(value * 1000).toISOString().slice(0, 10);
+}
+
+async function fetchYahooPrice(stock: RobinhoodToken, stooqError: string): Promise<PriceSnapshot> {
+  const url = `${YAHOO_CHART_SOURCE}${encodeURIComponent(stock.symbol)}?range=5d&interval=1d`;
+  const response = await fetchJson<YahooChartResponse>(url, {
+    timeoutMs: Number(env("YAHOO_CHART_TIMEOUT_MS", "6000")) || 6000
+  });
+  const result = response.data?.chart?.result?.[0];
+  const quote = result?.indicators?.quote?.[0];
+  const close = lastNumber(quote?.close) ?? result?.meta?.regularMarketPrice ?? result?.meta?.previousClose;
+  if (!response.ok || !result || typeof close !== "number") {
+    return {
+      symbol: stock.symbol,
+      ok: false,
+      source: `${STOOQ_SOURCE} + ${YAHOO_CHART_SOURCE}`,
+      error: response.error || stooqError || "quote_unavailable"
+    };
+  }
+
+  const lastTimestamp = result.timestamp?.[result.timestamp.length - 1];
   return {
     symbol: stock.symbol,
     ok: true,
-    source: STOOQ_SOURCE,
-    date: row.Date,
-    time: row.Time,
-    open: parseNumber(row.Open),
-    high: parseNumber(row.High),
-    low: parseNumber(row.Low),
-    close: parseNumber(row.Close),
-    volume: parseNumber(row.Volume)
+    source: YAHOO_CHART_SOURCE,
+    date: dateFromUnix(lastTimestamp),
+    open: lastNumber(quote?.open),
+    high: lastNumber(quote?.high),
+    low: lastNumber(quote?.low),
+    close,
+    volume: lastNumber(quote?.volume)
   };
 }
 
@@ -274,7 +342,7 @@ function timeoutFallbacks(stocks: RobinhoodToken[]): StockSignals {
 }
 
 export async function fetchStockSignals(stocks = robinhoodStockTokens): Promise<StockSignals> {
-  const sourceNote = "Hermes uses Stooq public quotes, SEC EDGAR submissions, and GDELT news as supporting stock context before any Robinhood Chain quote preparation.";
+  const sourceNote = "Hermes uses Stooq public quotes with Yahoo Chart fallback, SEC EDGAR submissions, and GDELT news as supporting stock context before any Robinhood Chain quote preparation.";
   const cacheKey = stocks.map((stock) => `${stock.symbol}:${stock.secCik || ""}`).join("|");
   const ttlMs = cacheTtlMs();
   if (stockSignalsCache && stockSignalsCache.key === cacheKey && Date.now() - stockSignalsCache.ts < ttlMs) {
