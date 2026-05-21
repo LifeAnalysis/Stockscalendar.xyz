@@ -65,6 +65,7 @@ p {
 .hero,
 .readiness,
 .workspace,
+.hermes-output-band,
 .recommendation-band,
 .insight-grid {
   width: min(1440px, 100%);
@@ -142,7 +143,7 @@ p {
 
 .readiness {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -329,7 +330,7 @@ p {
 
 .segmented {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   border: 1px solid var(--line);
   border-radius: 8px;
   overflow: hidden;
@@ -412,6 +413,49 @@ select {
 .inline-error {
   color: var(--bad);
   font-size: 13px;
+}
+
+.hermes-output-band {
+  display: grid;
+}
+
+.hermes-output-panel {
+  gap: 12px;
+}
+
+.hermes-output {
+  max-height: 280px;
+  color: var(--ink);
+  line-height: 1.45;
+}
+
+.tool-trace {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.trace-pill {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 6px 9px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.025);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.trace-pill.ok {
+  color: #06100b;
+  background: var(--good);
+  border-color: var(--good);
+}
+
+.trace-pill.degraded {
+  color: #130f05;
+  background: var(--warn);
+  border-color: var(--warn);
 }
 
 .result {

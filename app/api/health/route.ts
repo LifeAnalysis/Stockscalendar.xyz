@@ -22,7 +22,7 @@ export async function GET() {
     },
     data_pipeline: {
       intel_endpoint: "/api/robinhood/intel",
-      chat_ingestion: "/api/chat",
+      hermes_output_endpoint: "/api/hermes/output",
       agent_context: "robinhood_chain_tokens+stock_signal_feeds+kalshi_public_markets+public_event_calendars+explorer_discovery+recommendations"
     },
     kalshi: {
