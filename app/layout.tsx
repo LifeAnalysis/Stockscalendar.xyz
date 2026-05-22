@@ -1,15 +1,22 @@
 import "../src/styles.css";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
+import Providers from "./providers";
 
 export const metadata: Metadata = {
   title: "Hermes Robinhood Chain",
   description: "Nuvolari and Kalshi command center for Robinhood Chain stock tokens"
 };
 
-export default function RootLayout({ children }: { children: React.ReactNode }) {
+export default async function RootLayout({ children }: { children: React.ReactNode }) {
+  const headersList = await headers();
+  const cookies = headersList.get("cookie");
+
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <Providers cookies={cookies}>{children}</Providers>
+      </body>
     </html>
   );
 }

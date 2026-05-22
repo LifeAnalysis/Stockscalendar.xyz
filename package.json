@@ -13,14 +13,25 @@
     "check": "next lint && next build"
   },
   "dependencies": {
+    "@base-org/account": "^2.5.6",
+    "@metamask/connect-evm": "^1.3.1",
+    "@metamask/connect-multichain": "^0.14.0",
     "@react-three/fiber": "^9.6.1",
     "@react-three/postprocessing": "^3.0.4",
+    "@reown/appkit": "^1.8.20",
+    "@reown/appkit-adapter-wagmi": "^1.8.20",
+    "@tanstack/react-query": "^5.100.11",
+    "@walletconnect/ethereum-provider": "^2.23.9",
+    "accounts": "^0.10.7",
     "next": "^15.3.3",
+    "porto": "^0.2.37",
     "postprocessing": "^6.39.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "recharts": "^2.15.4",
-    "three": "^0.184.0"
+    "three": "^0.184.0",
+    "viem": "^2.50.4",
+    "wagmi": "^3.6.15"
   },
   "devDependencies": {
     "@types/node": "^22.15.21",

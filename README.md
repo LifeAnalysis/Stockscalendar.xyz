@@ -60,6 +60,11 @@ ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
 ROBINHOOD_CHAIN_ID=46630
 ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
 ROBINHOOD_STOCK_PROVIDER=nuvolari
+
+NEXT_PUBLIC_REOWN_PROJECT_ID=
+NEXT_PUBLIC_ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
+NEXT_PUBLIC_ROBINHOOD_CHAIN_ID=46630
+NEXT_PUBLIC_ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
 ```
 
 ## Source Of Truth

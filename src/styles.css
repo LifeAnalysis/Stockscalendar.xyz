@@ -236,6 +236,71 @@ p {
   overflow: hidden;
 }
 
+.hermes-data-section {
+  padding: 12px;
+  overflow: hidden;
+}
+
+.hermes-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+}
+
+.hermes-data-table {
+  width: 100%;
+  min-width: 920px;
+  border-collapse: collapse;
+  background: #ffffff;
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.hermes-data-table th,
+.hermes-data-table td {
+  border: 1px solid var(--border);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+  font-weight: 400;
+}
+
+.hermes-data-table th {
+  background: #ffffff;
+  color: var(--muted-foreground);
+  font-size: 10px;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.hermes-data-table small {
+  display: block;
+  margin-top: 4px;
+  max-width: 230px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.table-stock {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+}
+
+.table-stock .logo {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+}
+
+.hermes-data-table a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
 .trade-ticket {
   background: rgba(255, 255, 255, 0.62);
   border-color: #d8d8d8;
@@ -317,7 +382,7 @@ select {
 
 .swap-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   width: 100%;
   min-height: 32px;
   border: 1px solid #d8d8d8;
@@ -503,13 +568,17 @@ select {
   background: #f4f4f4;
 }
 
+.swap-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .wallet-route-stack {
   display: grid;
   gap: 6px;
 }
 
-.wallet-row,
-.route-row {
+.wallet-row {
   min-height: 48px;
   border: 1px solid #d8d8d8;
   border-radius: var(--radius);
@@ -524,8 +593,7 @@ select {
   padding: 8px 12px;
 }
 
-.wallet-row span,
-.route-row span {
+.wallet-row span {
   color: #777777;
   font-size: 11px;
   font-weight: 950;
@@ -544,16 +612,83 @@ select {
   font-weight: 850;
 }
 
-.route-row {
-  gap: 5px;
-  padding: 10px 12px;
+.wallet-actions {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
-.route-row p {
+.wallet-address-button,
+.wallet-link-button,
+.network-row button {
+  min-height: 32px;
+  border: 0;
+  border-radius: var(--radius);
+  background: transparent;
   color: #1f1f1f;
-  font-size: 13px;
+  padding: 0;
+  font-size: 15px;
+  font-weight: 900;
+}
+
+.wallet-address-button {
+  text-align: right;
+}
+
+.wallet-link-button,
+.network-row button {
+  color: #777777;
+  font-size: 12px;
+}
+
+.network-row,
+.quote-status {
+  min-height: 38px;
+  border: 1px solid #d8d8d8;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.58);
+  color: #777777;
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.network-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.network-row.ready span {
+  color: var(--green);
+}
+
+.quote-status {
+  display: grid;
+  gap: 7px;
   line-height: 1.35;
-  word-break: break-word;
+}
+
+.quote-status.error {
+  color: var(--red);
+}
+
+.tx-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tx-links a {
+  border: 1px solid #d8d8d8;
+  background: #ffffff;
+  color: #1f1f1f;
+  padding: 4px 6px;
+  font-size: 11px;
+  font-weight: 900;
 }
 
 .token-modal-backdrop {
@@ -563,12 +698,12 @@ select {
   display: grid;
   place-items: center;
   padding: 20px;
-  background: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.76);
 }
 
 .token-modal {
-  width: min(760px, 100%);
-  max-height: min(760px, calc(100vh - 40px));
+  width: min(420px, 100%);
+  max-height: min(520px, calc(100vh - 40px));
   border: 1px solid #d8d8d8;
   border-radius: var(--radius);
   background: #ffffff;
@@ -576,12 +711,12 @@ select {
   overflow: hidden;
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr);
-  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.45);
+  box-shadow: 0 20px 48px rgba(0, 0, 0, 0.18);
 }
 
 .token-modal-head {
-  min-height: 76px;
-  padding: 16px 22px;
+  min-height: 48px;
+  padding: 8px 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -589,50 +724,51 @@ select {
 
 .token-modal h3 {
   flex: 1;
-  text-align: center;
-  font-size: 24px;
+  text-align: left;
+  font-size: 16px;
   line-height: 1;
 }
 
 .token-search {
-  margin: 0 22px 20px;
-  min-height: 66px;
+  margin: 0 12px 10px;
+  min-height: 40px;
   border-radius: var(--radius);
   border: 1px solid #d8d8d8;
   background: #ffffff;
   color: #777777;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 12px;
+  gap: 8px;
   align-items: center;
-  padding: 0 18px;
+  padding: 0 10px;
 }
 
 .token-search input {
   border: 0;
   background: transparent;
   color: #1f1f1f;
-  font-size: 22px;
+  min-height: 38px;
+  font-size: 14px;
   padding: 0;
 }
 
 .token-list {
   border-top: 1px solid #d8d8d8;
   overflow-y: auto;
-  padding: 12px 18px 18px;
+  padding: 6px 8px 8px;
 }
 
 .token-row {
   width: 100%;
-  min-height: 76px;
+  min-height: 50px;
   border: 0;
   border-radius: var(--radius);
   background: transparent;
   color: #1f1f1f;
-  padding: 10px 12px;
+  padding: 7px 8px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
-  gap: 14px;
+  gap: 9px;
   align-items: center;
   text-align: left;
 }
@@ -643,9 +779,9 @@ select {
 }
 
 .token-row .logo {
-  width: 48px;
-  height: 48px;
-  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  border-radius: var(--radius);
 }
 
 .token-row-main {
@@ -657,19 +793,19 @@ select {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 22px;
+  font-size: 14px;
   line-height: 1.15;
 }
 
 .token-row-main span {
   color: #a5a7b0;
-  font-size: 16px;
+  font-size: 11px;
   font-weight: 750;
 }
 
 .token-change {
   color: #b4b6bf;
-  font-size: 18px;
+  font-size: 12px;
   font-weight: 900;
 }
 
@@ -710,6 +846,10 @@ select {
   padding: 0;
   text-align: left;
   min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
 }
 
 .stock-card:hover,
@@ -724,6 +864,22 @@ select {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   gap: 8px;
+}
+
+.mini-stock-chart {
+  width: 100%;
+  min-width: 56px;
+  height: 30px;
+  color: var(--primary);
+}
+
+.mini-stock-chart polyline,
+.mini-stock-chart line {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .ticker {
@@ -1039,6 +1195,220 @@ select {
 
 .cn-card-content {
   min-width: 0;
+}
+
+.earnings-calendar {
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.92);
+  color: var(--card-foreground);
+  box-shadow: none;
+}
+
+.earnings-calendar-toolbar {
+  min-width: 720px;
+  min-height: 58px;
+  display: grid;
+  grid-template-columns: auto auto auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.earnings-calendar-toolbar button,
+.calendar-view-chip {
+  min-height: 34px;
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--paper-strong);
+  color: var(--foreground);
+  font-weight: 850;
+  padding: 0 12px;
+}
+
+.calendar-icon-button {
+  width: 34px;
+  padding: 0;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.earnings-calendar-toolbar h3 {
+  margin: 0 0 0 6px;
+  overflow: hidden;
+  color: var(--foreground);
+  font-size: 24px;
+  line-height: 1;
+  letter-spacing: 0;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-view-chip {
+  color: var(--muted-foreground);
+}
+
+.earnings-calendar-weekdays,
+.earnings-calendar-grid {
+  min-width: 720px;
+}
+
+.earnings-calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  border-bottom: 1px solid var(--border);
+}
+
+.earnings-calendar-weekdays span {
+  padding: 11px 8px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.earnings-calendar-grid {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.earnings-day {
+  min-height: 112px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 9px;
+  border-right: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.74);
+}
+
+.earnings-day:nth-child(7n) {
+  border-right: 0;
+}
+
+.earnings-day.outside {
+  background: rgba(255, 255, 255, 0.46);
+  color: var(--muted-foreground);
+}
+
+.earnings-day-number {
+  width: max-content;
+  min-width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  color: inherit;
+  font-size: 14px;
+  font-weight: 850;
+}
+
+.earnings-day.today .earnings-day-number {
+  border-radius: 999px;
+  background: var(--foreground);
+  color: var(--paper);
+}
+
+.earnings-day-events {
+  display: grid;
+  gap: 5px;
+}
+
+.earnings-event {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  align-items: center;
+  column-gap: 6px;
+  padding: 5px 7px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--foreground);
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.earnings-event .logo {
+  width: 20px;
+  height: 20px;
+  grid-row: 1 / 3;
+  border-radius: 4px;
+}
+
+.earnings-event span,
+.earnings-event small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.earnings-event small {
+  color: var(--muted-foreground);
+  font-size: 10px;
+  font-weight: 850;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.earnings-event.amzn,
+.earnings-event.tsla,
+.earnings-event.nflx,
+.earnings-event.amd,
+.earnings-event.pltr {
+  background: #ffffff;
+  color: var(--foreground);
+}
+
+.earnings-event.amzn small,
+.earnings-event.tsla small,
+.earnings-event.nflx small,
+.earnings-event.amd small,
+.earnings-event.pltr small {
+  color: var(--muted-foreground);
+}
+
+.earnings-event.amzn {
+  background: #ffffff;
+  color: var(--foreground);
+}
+
+.earnings-event.amzn small {
+  color: var(--muted-foreground);
+}
+
+.earnings-event.tsla,
+.earnings-event.nflx {
+  background: #ffffff;
+  color: var(--foreground);
+}
+
+.earnings-event.tsla small,
+.earnings-event.nflx small {
+  color: var(--muted-foreground);
+}
+
+.earnings-event.amd {
+  background: #ffffff;
+  color: var(--foreground);
+}
+
+.earnings-event.amd small {
+  color: var(--muted-foreground);
+}
+
+.earnings-event.pltr {
+  background: #ffffff;
+  color: var(--foreground);
+}
+
+.earnings-event.pltr small {
+  color: var(--muted-foreground);
 }
 
 .cn-button,
@@ -1419,6 +1789,7 @@ select {
 
   .stock-card {
     min-height: 52px;
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .stock-top {
@@ -1430,10 +1801,24 @@ select {
     height: 26px;
   }
 
+  .stock-card .contract-row,
+  .stock-card .copy-btn,
+  .mini-stock-chart {
+    display: none;
+  }
+
+  .token-modal {
+    width: min(360px, 100%);
+  }
+
   .section-head,
   .research-heading {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .earnings-calendar-toolbar {
+    grid-template-columns: auto auto auto minmax(150px, 1fr) auto;
   }
 
 }

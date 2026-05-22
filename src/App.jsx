@@ -1,7 +1,17 @@
 "use client";
 
 /* eslint-disable @next/next/no-img-element */
+import { useAppKit, useAppKitAccount, useAppKitNetwork, useDisconnect } from "@reown/appkit/react";
 import * as React from "react";
+import { isAddress } from "viem";
+import { usePublicClient, useSendTransaction } from "wagmi";
+import { earningsEvents } from "./earningsData.js";
+import {
+  ROBINHOOD_CHAIN_EXPLORER,
+  ROBINHOOD_CHAIN_ID,
+  isReownConfigured,
+  robinhoodChain
+} from "./web3/config";
 
 const Dither = React.lazy(() => import("./Dither.jsx"));
 const InteractiveStockChart = React.lazy(() =>
@@ -100,6 +110,82 @@ function ArrowDownIcon() {
   );
 }
 
+function shortenAddress(value) {
+  return value ? `${value.slice(0, 6)}...${value.slice(-4)}` : "";
+}
+
+function toBigIntValue(value) {
+  if (value === undefined || value === null || value === "" || value === "0" || value === "0x0") return undefined;
+  if (typeof value === "bigint") return value;
+  if (typeof value === "number" && Number.isFinite(value)) return BigInt(Math.trunc(value));
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  try {
+    if (/^0x[0-9a-fA-F]+$/.test(trimmed) || /^\d+$/.test(trimmed)) return BigInt(trimmed);
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
+function normalizeTransactionRequest(value, fallbackLabel) {
+  if (!value || typeof value !== "object") return null;
+  const request = value.transactionRequest || value.request || value.tx || value;
+  const to = request.to || request.toAddress || request.target || request.router || request.routerAddress;
+  if (!to || !isAddress(to)) return null;
+
+  const data = request.data || request.callData || request.calldata || request.input;
+  const transaction = {
+    label: request.label || request.type || fallbackLabel || "Transaction",
+    to,
+    data: typeof data === "string" && data ? data : undefined,
+    value: toBigIntValue(request.value || request.valueWei || request.nativeValue),
+    gas: toBigIntValue(request.gas || request.gasLimit)
+  };
+
+  if (!transaction.data && !transaction.value) return null;
+  return transaction;
+}
+
+function extractTransactionRequests(payload) {
+  const transactions = [];
+  const seenObjects = new Set();
+  const seenTransactions = new Set();
+
+  function visit(value, label = "Transaction", depth = 0) {
+    if (!value || depth > 7) return;
+    if (Array.isArray(value)) {
+      value.forEach((item, index) => visit(item, `${label} ${index + 1}`, depth + 1));
+      return;
+    }
+    if (typeof value !== "object" || seenObjects.has(value)) return;
+    seenObjects.add(value);
+
+    const transaction = normalizeTransactionRequest(value, label);
+    if (transaction) {
+      const key = `${transaction.to}:${transaction.data || ""}:${transaction.value?.toString() || "0"}`;
+      if (!seenTransactions.has(key)) {
+        seenTransactions.add(key);
+        transactions.push(transaction);
+      }
+    }
+
+    for (const [key, nested] of Object.entries(value)) {
+      if (/abi|logs?|stock_universe/i.test(key)) continue;
+      const nextLabel = /approve|allowance/i.test(key)
+        ? "Approval"
+        : /swap|trade|execute|transaction|tx/i.test(key)
+        ? "Swap"
+        : label;
+      visit(nested, nextLabel, depth + 1);
+    }
+  }
+
+  visit(payload);
+  return transactions;
+}
+
 function TokenButton({ token, placeholder, onClick, accent }) {
   return (
     <button className={`swap-token-button ${accent ? "accent" : ""}`} type="button" onClick={onClick}>
@@ -196,6 +282,29 @@ function StockChartView({ data, ticker, status }) {
   );
 }
 
+function MiniStockChart({ data }) {
+  const points = React.useMemo(() => {
+    const closes = (data || []).slice(-24).map((item) => Number(item.close)).filter(Number.isFinite);
+    if (closes.length < 2) return "";
+    const min = Math.min(...closes);
+    const max = Math.max(...closes);
+    const range = max - min || 1;
+    return closes
+      .map((value, index) => {
+        const x = (index / (closes.length - 1)) * 86 + 2;
+        const y = 30 - ((value - min) / range) * 24 + 3;
+        return `${x.toFixed(1)},${y.toFixed(1)}`;
+      })
+      .join(" ");
+  }, [data]);
+
+  return (
+    <svg className="mini-stock-chart" viewBox="0 0 90 36" aria-hidden="true">
+      {points ? <polyline points={points} /> : <line x1="4" y1="24" x2="86" y2="24" />}
+    </svg>
+  );
+}
+
 async function readJsonResponse(response) {
   const contentType = response.headers.get("content-type") || "";
   if (!response.ok || !contentType.includes("application/json")) return null;
@@ -248,20 +357,258 @@ function HermesOutputBar({ stock, hermesOutput }) {
   );
 }
 
+function formatNumber(value) {
+  if (value === undefined || value === null || value === "") return "n/a";
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("en-US") : String(value);
+}
+
+function formatMoney(value) {
+  if (value === undefined || value === null || value === "") return "n/a";
+  const number = Number(value);
+  return Number.isFinite(number) ? `$${number.toLocaleString("en-US")}` : String(value);
+}
+
+function formatConfidence(value) {
+  if (value === undefined || value === null || value === "") return "No score";
+  const number = Number(value);
+  return Number.isFinite(number) ? `${number}/100 confidence` : `${value} confidence`;
+}
+
+function formatEarningsDate(value) {
+  if (!value) return "n/a";
+  const date = new Date(`${value}T12:00:00`);
+  if (Number.isNaN(date.getTime())) return value;
+  return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+function earningsSummary(symbol) {
+  const today = dateKey(new Date());
+  const events = earningsEvents.filter((event) => event.symbol === symbol).sort((a, b) => a.date.localeCompare(b.date));
+  const latest = [...events].reverse().find((event) => event.date <= today);
+  const next = events.find((event) => event.date > today);
+  return { latest, next };
+}
+
+function HermesDataTable({ stocks, hermesOutput }) {
+  const intel = hermesOutput?.data;
+  const calendars = new Map((intel?.calendars || []).map((item) => [item.symbol, item]));
+  const prices = new Map((intel?.stock_signals?.prices || []).map((item) => [item.symbol, item]));
+  const filings = new Map((intel?.stock_signals?.filings || []).map((item) => [item.symbol, item]));
+  const news = new Map((intel?.stock_signals?.news || []).map((item) => [item.symbol, item]));
+  const decisionRows = hermesOutput?.hermes_decision?.stocks || intel?.hermes_decision?.stocks || [];
+  const decisions = new Map(decisionRows.map((item) => [item.symbol, item]));
+  const kalshi = new Map((intel?.kalshi?.stocks || []).map((item) => [item.stock?.symbol, item]));
+
+  return (
+    <section className="panel hermes-data-section" aria-label="Hermes stock data table">
+      <div className="hermes-table-wrap">
+        <table className="hermes-data-table">
+          <thead>
+            <tr>
+              <th>Stock</th>
+              <th>Earnings</th>
+              <th>Hermes</th>
+              <th>Latest quote</th>
+              <th>SEC filing</th>
+              <th>News</th>
+              <th>Kalshi</th>
+            </tr>
+          </thead>
+          <tbody>
+            {stocks.map((stock) => {
+              const calendar = calendars.get(stock.symbol);
+              const price = prices.get(stock.symbol);
+              const filing = filings.get(stock.symbol);
+              const latestFiling = filing?.latest_material || decisions.get(stock.symbol)?.latest_filing;
+              const newsRow = news.get(stock.symbol);
+              const decision = decisions.get(stock.symbol);
+              const kalshiRow = kalshi.get(stock.symbol);
+              const topMarket = kalshiRow?.markets?.[0];
+              const earnings = earningsSummary(stock.symbol);
+              const backendDate = calendar?.earnings_dates?.[0];
+              const nextEarnings = backendDate || earnings.next?.date;
+              const latestEarnings = earnings.latest?.date;
+              const estimates = [
+                calendar?.estimates?.earnings_average ? `EPS ${calendar.estimates.earnings_average}` : null,
+                calendar?.estimates?.revenue_average ? `Rev ${calendar.estimates.revenue_average}` : null
+              ].filter(Boolean).join(" / ");
+              const topArticles = (newsRow?.top_articles || []).slice(0, 2);
+
+              return (
+                <tr key={stock.symbol}>
+                  <td>
+                    <div className="table-stock">
+                      <Logo stock={stock} />
+                      <span>{stock.symbol}</span>
+                    </div>
+                  </td>
+                  <td>
+                    <div>{nextEarnings ? `Next ${formatEarningsDate(nextEarnings)}` : "No upcoming date"}</div>
+                    <small>{latestEarnings ? `Last ${formatEarningsDate(latestEarnings)}` : "No 2020+ history"}{estimates ? ` · ${estimates}` : ""}</small>
+                  </td>
+                  <td>
+                    <div>{decision?.action || "n/a"}</div>
+                    <small>{formatConfidence(decision?.confidence)}</small>
+                  </td>
+                  <td>
+                    <div>{price?.ok ? formatMoney(price.close) : "n/a"}</div>
+                    <small>{price?.ok ? `${formatNumber(price.volume)} vol · ${price.date || "no date"}` : price?.error || "No quote"}</small>
+                  </td>
+                  <td>
+                    {latestFiling?.document_url ? (
+                      <a href={latestFiling.document_url} target="_blank" rel="noreferrer">{latestFiling.form}</a>
+                    ) : (
+                      <span>{latestFiling?.form || "n/a"}</span>
+                    )}
+                    <small>{latestFiling?.filing_date || filing?.error || "No filing"}</small>
+                  </td>
+                  <td>
+                    <div>{newsRow?.article_count ?? decision?.news_count ?? 0} articles</div>
+                    <small>
+                      {topArticles.length
+                        ? topArticles.map((article) => article.title).join(" | ")
+                        : newsRow?.error || "No recent articles"}
+                    </small>
+                  </td>
+                  <td>
+                    <div>
+                      {topMarket
+                        ? `YES ${topMarket.yes_bid_dollars || "n/a"}/${topMarket.yes_ask_dollars || "n/a"}`
+                        : "No match"}
+                    </div>
+                    <small>
+                      {topMarket
+                        ? `NO ${topMarket.no_bid_dollars || "n/a"}/${topMarket.no_ask_dollars || "n/a"} · ${topMarket.ticker}`
+                      : `${kalshiRow?.match_count || 0} matched markets`}
+                    </small>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+function dateKey(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function monthStart(date) {
+  return new Date(date.getFullYear(), date.getMonth(), 1);
+}
+
+function addMonths(date, amount) {
+  return new Date(date.getFullYear(), date.getMonth() + amount, 1);
+}
+
+function monthTitle(date) {
+  return date.toLocaleDateString("en-US", { month: "long", year: "numeric" });
+}
+
+function buildCalendarDays(monthDate) {
+  const first = monthStart(monthDate);
+  const start = new Date(first);
+  start.setDate(first.getDate() - first.getDay());
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(start);
+    day.setDate(start.getDate() + index);
+    return day;
+  });
+}
+
+function EarningsCalendar({ events, stocks, monthDate, onMonthChange }) {
+  const supported = React.useMemo(() => new Map(stocks.map((item) => [item.symbol, item])), [stocks]);
+  const eventsByDate = React.useMemo(() => {
+    const grouped = new Map();
+    events
+      .filter((event) => supported.has(event.symbol))
+      .filter((event) => event.date >= "2020-01-01")
+      .forEach((event) => {
+        const group = grouped.get(event.date) || [];
+        group.push(event);
+        grouped.set(event.date, group);
+      });
+    return grouped;
+  }, [events, supported]);
+  const today = new Date();
+  const days = buildCalendarDays(monthDate);
+  const weekdayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+  return (
+    <section className="earnings-calendar" aria-label="Supported stock earnings calendar">
+      <div className="earnings-calendar-toolbar">
+        <button type="button" onClick={() => onMonthChange(monthStart(today))}>Today</button>
+        <button className="calendar-icon-button" type="button" aria-label="Previous month" onClick={() => onMonthChange(addMonths(monthDate, -1))}>‹</button>
+        <button className="calendar-icon-button" type="button" aria-label="Next month" onClick={() => onMonthChange(addMonths(monthDate, 1))}>›</button>
+        <h3>{monthTitle(monthDate)}</h3>
+        <span className="calendar-view-chip">Month</span>
+      </div>
+      <div className="earnings-calendar-weekdays">
+        {weekdayLabels.map((label) => <span key={label}>{label}</span>)}
+      </div>
+      <div className="earnings-calendar-grid">
+        {days.map((day) => {
+          const key = dateKey(day);
+          const inMonth = day.getMonth() === monthDate.getMonth();
+          const isToday = key === dateKey(today);
+          const dayEvents = eventsByDate.get(key) || [];
+          return (
+            <div className={`earnings-day ${inMonth ? "" : "outside"} ${isToday ? "today" : ""}`} key={key}>
+              <div className="earnings-day-number">{day.getDate()}</div>
+              <div className="earnings-day-events">
+                {dayEvents.map((event) => {
+                  const eventStock = supported.get(event.symbol);
+                  return (
+                    <div className={`earnings-event ${event.symbol.toLowerCase()}`} key={`${event.symbol}-${event.date}`}>
+                      {eventStock ? <Logo stock={eventStock} /> : null}
+                      <span>{event.symbol}</span>
+                      <small>Earnings</small>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
 function App() {
+  const { open } = useAppKit();
+  const { address, isConnected } = useAppKitAccount({ namespace: "eip155" });
+  const { chainId, switchNetwork } = useAppKitNetwork();
+  const { disconnect } = useDisconnect();
+  const publicClient = usePublicClient({ chainId: ROBINHOOD_CHAIN_ID });
+  const { sendTransactionAsync, isPending: walletPending } = useSendTransaction();
+
   const [selected, setSelected] = React.useState("TSLA");
   const [side, setSide] = React.useState("buy");
   const [stocks, setStocks] = React.useState([]);
   const [payTokens, setPayTokens] = React.useState([]);
   const [payTokenSymbol, setPayTokenSymbol] = React.useState("USDG");
   const [amount, setAmount] = React.useState("");
-  const [wallet, setWallet] = React.useState("");
   const [tokenPicker, setTokenPicker] = React.useState(null);
-  const [routePreview, setRoutePreview] = React.useState("Choose a supported stock to build a route preview.");
   const [backend, setBackend] = React.useState({ health: false, intel: false, trade: false });
   const [hermesOutput, setHermesOutput] = React.useState(null);
   const [charts, setCharts] = React.useState({});
   const [chartStatus, setChartStatus] = React.useState("idle");
+  const [calendarMonth, setCalendarMonth] = React.useState(() => monthStart(new Date()));
+  const [quote, setQuote] = React.useState(null);
+  const [quoteTransactions, setQuoteTransactions] = React.useState([]);
+  const [tradeStatus, setTradeStatus] = React.useState("");
+  const [tradeError, setTradeError] = React.useState("");
+  const [txHashes, setTxHashes] = React.useState([]);
+  const [isPreparingQuote, setIsPreparingQuote] = React.useState(false);
+  const [isExecutingQuote, setIsExecutingQuote] = React.useState(false);
 
   const stock = stocks.find((item) => item.symbol === selected);
   const payToken = payTokens.find((token) => token.symbol === payTokenSymbol) || payTokens[0];
@@ -271,6 +618,9 @@ function App() {
   const selectedScore = stock ? stock.score : 0;
   const estimatedOutput = stock && amountNumber > 0 ? (amountNumber / Math.max(stock.score, 1)).toFixed(6) : "0";
   const selectedChartData = stock ? charts[stock.symbol] || [] : [];
+  const wallet = address || "";
+  const connectedToRobinhood = Number(chainId) === ROBINHOOD_CHAIN_ID;
+  const tradeBusy = isPreparingQuote || isExecutingQuote || walletPending;
 
   const loadYahooCharts = React.useCallback(async (symbols) => {
     if (!symbols.length) {
@@ -361,12 +711,12 @@ function App() {
   }, [loadYahooCharts, stocks]);
 
   React.useEffect(() => {
-    if (!stock || !payToken) {
-      setRoutePreview("Choose a supported stock to build a route preview.");
-      return;
-    }
-    setRoutePreview(`${side === "sell" ? stock.symbol : payToken.symbol} -> ${side === "sell" ? payToken.symbol : stock.symbol}. Robinhood Chain ${side} quote will use exact contracts on chain 46630.`);
-  }, [stock, payToken, side]);
+    setQuote(null);
+    setQuoteTransactions([]);
+    setTxHashes([]);
+    setTradeStatus("");
+    setTradeError("");
+  }, [selected, payTokenSymbol, side, amount]);
 
   function routePayload() {
     if (!stock || !payToken) return null;
@@ -376,10 +726,58 @@ function App() {
       source_asset: isSell ? stock.address : payToken.address,
       target_asset: isSell ? payToken.address : stock.address,
       amount: amount.trim(),
-      wallet_address: wallet.trim(),
+      wallet_address: wallet,
       provider: "auto",
       strategy: `Hermes Robinhood Chain ${side} route for ${stock.symbol}`
     };
+  }
+
+  async function connectWallet() {
+    if (!isReownConfigured) {
+      setTradeError("Set NEXT_PUBLIC_REOWN_PROJECT_ID before connecting a wallet.");
+      return;
+    }
+    setTradeError("");
+    await open({ view: "Connect", namespace: "eip155" });
+  }
+
+  async function switchToRobinhood() {
+    setTradeError("");
+    setTradeStatus("Requesting Robinhood Chain in wallet...");
+    await switchNetwork(robinhoodChain);
+  }
+
+  async function executeQuoteTransactions() {
+    if (!quoteTransactions.length) {
+      setTradeError("Quote did not include an executable wallet transaction.");
+      return;
+    }
+    setIsExecutingQuote(true);
+    setTradeError("");
+    setTxHashes([]);
+    try {
+      const hashes = [];
+      for (const transaction of quoteTransactions) {
+        setTradeStatus(`Waiting for wallet signature: ${transaction.label}`);
+        const hash = await sendTransactionAsync({
+          to: transaction.to,
+          data: transaction.data,
+          value: transaction.value,
+          gas: transaction.gas,
+          chainId: ROBINHOOD_CHAIN_ID
+        });
+        hashes.push(hash);
+        setTxHashes([...hashes]);
+        setTradeStatus(`Confirming ${transaction.label}...`);
+        if (publicClient) await publicClient.waitForTransactionReceipt({ hash });
+      }
+      setTradeStatus("Swap transaction confirmed on Robinhood Chain.");
+      setQuoteTransactions([]);
+    } catch (error) {
+      setTradeError(error?.shortMessage || error?.message || "Wallet transaction failed.");
+    } finally {
+      setIsExecutingQuote(false);
+    }
   }
 
   async function copy(value) {
@@ -392,16 +790,31 @@ function App() {
 
   async function submitTrade(event) {
     event.preventDefault();
+    if (!isConnected) {
+      await connectWallet();
+      return;
+    }
+    if (!connectedToRobinhood) {
+      await switchToRobinhood();
+      return;
+    }
+    if (quoteTransactions.length) {
+      await executeQuoteTransactions();
+      return;
+    }
+
     const payload = routePayload();
     if (!payload) {
-      setRoutePreview("Select a stock before preparing a quote.");
+      setTradeError("Select a stock before preparing a quote.");
       return;
     }
     if (!payload.wallet_address || !payload.amount) {
-      setRoutePreview("Enter wallet EOA and amount to prepare a Nuvolari quote.");
+      setTradeError("Connect wallet and enter an amount to prepare a Nuvolari quote.");
       return;
     }
-    setRoutePreview("Preparing quote...");
+    setIsPreparingQuote(true);
+    setTradeError("");
+    setTradeStatus("Preparing Nuvolari quote...");
     try {
       const res = await fetch("/api/robinhood/trade", {
         method: "POST",
@@ -410,13 +823,38 @@ function App() {
       });
       const payload = await readJsonResponse(res);
       if (!res.ok || !payload) {
-        setRoutePreview(`Quote request failed with status ${res.status}`);
+        setTradeError(`Quote request failed with status ${res.status}.`);
         return;
       }
-      setRoutePreview(JSON.stringify(payload));
+      if (payload.ok === false) {
+        setQuote(payload);
+        setQuoteTransactions([]);
+        setTradeError(payload.message || payload.error || "Quote request was rejected.");
+        return;
+      }
+      const transactions = extractTransactionRequests(payload);
+      setQuote(payload);
+      setQuoteTransactions(transactions);
+      setTradeStatus(
+        transactions.length
+          ? `Quote ready. ${transactions.length === 1 ? "Sign the swap transaction" : `Sign ${transactions.length} wallet transactions`}.`
+          : "Quote prepared, but the response did not include an executable wallet transaction."
+      );
     } catch (error) {
-      setRoutePreview(`Quote request failed: ${error.message}`);
+      setTradeError(`Quote request failed: ${error.message}`);
+    } finally {
+      setIsPreparingQuote(false);
     }
+  }
+
+  function submitLabel() {
+    if (!isReownConfigured) return "Add Reown project ID";
+    if (!isConnected) return "Connect wallet";
+    if (!connectedToRobinhood) return "Switch to Robinhood";
+    if (isPreparingQuote) return "Preparing quote";
+    if (isExecutingQuote || walletPending) return "Waiting for wallet";
+    if (quoteTransactions.length) return quoteTransactions.length === 1 ? "Sign swap" : `Sign ${quoteTransactions.length} txs`;
+    return "Prepare quote";
   }
 
   function selectToken(kind, item) {
@@ -474,7 +912,6 @@ function App() {
                 <div className="swap-tabs" aria-label="Trade side">
                   <button className={side === "buy" ? "active" : ""} type="button" onClick={() => setSide("buy")}>Buy</button>
                   <button className={side === "sell" ? "active sell" : ""} type="button" onClick={() => setSide("sell")}>Sell</button>
-                  <button className={side === "swap" ? "active" : ""} type="button" onClick={() => setSide("swap")}>Swap</button>
                 </div>
               </div>
 
@@ -515,18 +952,51 @@ function App() {
               </div>
 
               <div className="wallet-route-stack">
-                <label className="wallet-row">
-                  <span>Wallet EOA</span>
-                  <input value={wallet} onChange={(event) => setWallet(event.target.value)} placeholder="0x..." />
-                </label>
-                <div className="route-row">
-                  <span>Route</span>
-                  <p>{routePreview}</p>
+                <div className="wallet-row wallet-connect-row">
+                  <span>Wallet</span>
+                  {isConnected ? (
+                    <div className="wallet-actions">
+                      <button className="wallet-address-button" type="button" onClick={() => open({ view: "Account" })}>
+                        {shortenAddress(wallet)}
+                      </button>
+                      <button className="wallet-link-button" type="button" onClick={() => disconnect()}>
+                        Disconnect
+                      </button>
+                    </div>
+                  ) : (
+                    <button className="wallet-address-button" type="button" onClick={connectWallet}>
+                      Connect
+                    </button>
+                  )}
                 </div>
+                {isConnected && (
+                  <div className={`network-row ${connectedToRobinhood ? "ready" : ""}`}>
+                    <span>{connectedToRobinhood ? "Robinhood Chain" : "Wrong network"}</span>
+                    {!connectedToRobinhood && (
+                      <button type="button" onClick={switchToRobinhood}>
+                        Switch
+                      </button>
+                    )}
+                  </div>
+                )}
+                {(tradeStatus || tradeError || txHashes.length > 0 || quote) && (
+                  <div className={`quote-status ${tradeError ? "error" : ""}`}>
+                    {tradeError || tradeStatus}
+                    {txHashes.length > 0 && (
+                      <div className="tx-links">
+                        {txHashes.map((hash) => (
+                          <a key={hash} href={`${ROBINHOOD_CHAIN_EXPLORER}/tx/${hash}`} target="_blank" rel="noreferrer">
+                            {shortenAddress(hash)}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
-              <button className="swap-submit" type="submit">
-                {wallet.trim() ? "Prepare quote" : "Connect wallet"}
+              <button className="swap-submit" type="submit" disabled={tradeBusy || !isReownConfigured}>
+                {submitLabel()}
               </button>
             </div>
           </form>
@@ -540,6 +1010,7 @@ function App() {
                       <Logo stock={item} />
                       <div className="ticker">{item.symbol}</div>
                     </div>
+                    <MiniStockChart data={charts[item.symbol] || []} />
                   </button>
                   <div className="contract-row">
                     <button className="copy-btn" type="button" aria-label={`Copy ${item.symbol} contract`} onClick={() => copy(item.address)}>
@@ -550,6 +1021,13 @@ function App() {
               ))}
             </div>
           </section>
+          <HermesDataTable stocks={stocks} hermesOutput={hermesOutput} />
+          <EarningsCalendar
+            events={earningsEvents}
+            stocks={stocks}
+            monthDate={calendarMonth}
+            onMonthChange={setCalendarMonth}
+          />
         </section>
 
         {stock && (
