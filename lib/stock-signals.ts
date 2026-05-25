@@ -199,9 +199,10 @@ function lastNumber(values?: Array<number | null>): number | undefined {
   return undefined;
 }
 
-function dateFromUnix(value?: number): string | undefined {
+function dateFromUnix(value?: number, includeTime = false): string | undefined {
   if (!value) return undefined;
-  return new Date(value * 1000).toISOString().slice(0, 10);
+  const iso = new Date(value * 1000).toISOString();
+  return includeTime ? iso : iso.slice(0, 10);
 }
 
 async function fetchYahooPrice(stock: RobinhoodToken, stooqError: string): Promise<PriceSnapshot> {
@@ -258,7 +259,7 @@ export async function fetchYahooChart(
       const close = numberAt(quote?.close, index);
       if (typeof close !== "number") return null;
       return {
-        date: dateFromUnix(timestamp) || new Date(timestamp * 1000).toISOString(),
+        date: dateFromUnix(timestamp, interval !== "1d" && interval !== "1wk" && interval !== "1mo") || new Date(timestamp * 1000).toISOString(),
         open: numberAt(quote?.open, index),
         high: numberAt(quote?.high, index),
         low: numberAt(quote?.low, index),

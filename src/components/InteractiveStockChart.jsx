@@ -11,15 +11,15 @@ const chartConfig = {
   },
   high: {
     label: "High",
-    color: "var(--chart-3)"
+    color: "#04151f"
   },
   close: {
     label: "Close",
-    color: "var(--chart-2)"
+    color: "#ccff00"
   },
   low: {
     label: "Low",
-    color: "var(--chart-1)"
+    color: "#407076"
   }
 };
 
@@ -27,11 +27,22 @@ export const InteractiveStockChart = ({ chartData }) => {
   const formattedData = useMemo(
     () =>
       chartData
-        .map((item) => ({
-          ...item,
-          dateTime: new Date(item.date).getTime()
-        }))
-        .filter((item) => !Number.isNaN(item.dateTime))
+        .map((item) => {
+          const close = Number(item.close);
+          if (!Number.isFinite(close)) return null;
+          const open = Number.isFinite(Number(item.open)) ? Number(item.open) : close;
+          const high = Number.isFinite(Number(item.high)) ? Number(item.high) : Math.max(open, close);
+          const low = Number.isFinite(Number(item.low)) ? Number(item.low) : Math.min(open, close);
+          return {
+            ...item,
+            open,
+            high,
+            low,
+            close,
+            dateTime: new Date(item.date).getTime()
+          };
+        })
+        .filter((item) => item && !Number.isNaN(item.dateTime))
         .sort((a, b) => a.dateTime - b.dateTime),
     [chartData]
   );
@@ -45,6 +56,8 @@ export const InteractiveStockChart = ({ chartData }) => {
     [formattedData]
   );
 
+  if (!formattedData.length) return <div className="chart-fallback chart-state">Chart unavailable from Yahoo.</div>;
+
   return (
     <Card className="interactive-stock-chart">
       <CardContent>
@@ -53,10 +66,10 @@ export const InteractiveStockChart = ({ chartData }) => {
             <LineChart
               data={formattedData}
               margin={{
-                top: 20,
-                right: 30,
-                left: 20,
-                bottom: 10
+                top: 16,
+                right: 12,
+                left: 4,
+                bottom: 8
               }}
             >
               <CartesianGrid strokeDasharray="3 3" />

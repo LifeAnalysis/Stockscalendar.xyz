@@ -1,6 +1,6 @@
 import { env } from "./env";
 import { fetchJson } from "./http";
-import { buildStockIntel } from "./intel";
+import { buildStockIntel, compactStockIntel } from "./intel";
 
 type OpenRouterResponse = {
   choices?: Array<{
@@ -40,9 +40,10 @@ async function askHermes(message: string, intel: Awaited<ReturnType<typeof build
 
   const model = env("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash");
   const maxTokens = Number(env("OPENROUTER_MAX_TOKENS", "1200"));
+  const timeoutMs = Number(env("OPENROUTER_TIMEOUT_MS", "45000"));
   const response = await fetchJson<OpenRouterResponse>("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
-    timeoutMs: 30000,
+    timeoutMs: Number.isFinite(timeoutMs) ? Math.max(10000, Math.trunc(timeoutMs)) : 45000,
     headers: {
       Authorization: `Bearer ${apiKey}`,
       "HTTP-Referer": "https://hermes-agent-backend.vercel.app",
@@ -83,14 +84,14 @@ async function askHermes(message: string, intel: Awaited<ReturnType<typeof build
   return response.ok ? response.data?.choices?.[0]?.message?.content?.trim() || null : null;
 }
 
-export async function buildHermesOutput(message = DEFAULT_HERMES_OUTPUT_PROMPT) {
+export async function buildHermesOutput(message = DEFAULT_HERMES_OUTPUT_PROMPT, options: { debug?: boolean } = {}) {
   const intel = await buildStockIntel();
   const openrouterConfigured = Boolean(env("OPENROUTER_API_KEY"));
   const reply = (await askHermes(message, intel)) || fallbackReply(intel);
   return {
     reply,
     hermes_decision: intel.hermes_decision,
-    data: intel,
+    data: options.debug ? intel : compactStockIntel(intel),
     tool_trace: [
       { name: "buildStockIntel", ok: intel.ok, degraded_sources: intel.pipeline.degraded_sources },
       { name: "openrouter_chat", ok: openrouterConfigured }

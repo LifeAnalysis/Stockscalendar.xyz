@@ -26,6 +26,9 @@ lib/intel.ts                       Pipeline checks and compact agent context
 ```bash
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_TIMEOUT_MS=45000
+DATABASE_URL=
+EARNINGS_BACKTEST_CACHE_HOURS=24
 
 KALSHI_API_BASE_URL=https://external-api.kalshi.com/trade-api/v2
 KALSHI_MARKET_CACHE_SECONDS=180
@@ -81,6 +84,18 @@ Stock context comes from free/no-secret feeds: Stooq public quote CSVs, Yahoo Ch
 
 `/api/chat` passes that context to OpenRouter when `OPENROUTER_API_KEY` is configured. Without OpenRouter, it still returns a deterministic pipeline-aware response and includes the raw intel payload for inspection.
 
+`/api/hermes/output` returns compact browser-safe data by default. Add `?debug=1` only when the full backend payload is needed for inspection.
+
+The frontend loads in stages: supported stock catalog first, compact stock intel second, and the slower Hermes/OpenRouter response last. While Hermes is running, the UI stays interactive and shows progress instead of blocking the stock desk.
+
+`/api/hermes/backtest?symbol=TSLA` builds the previous-three-earnings table for supported Robinhood Chain stock tokens. It uses curated 2020+ earnings dates, Yahoo Chart OHLC around each earnings date, date-bounded GDELT headlines, Kalshi public market matches when available, and OpenRouter for the concise event read. When `DATABASE_URL` or `POSTGRES_URL` is configured, results are cached in Postgres in `hermes_earnings_backtests`; otherwise the route falls back to in-memory cache for local development.
+
+## Deployment
+
+This repository is configured for Vercel as a Next.js app via `vercel.json`. The active backend is the set of Next API routes under `app/api/*`; external services are OpenRouter, Nuvolari staging, Kalshi public Trade API, Yahoo Finance, Stooq, SEC EDGAR, GDELT, and the Robinhood Chain testnet RPC/explorer.
+
+Use a production Reown project ID with the deployed domain allowlisted. If `NEXT_PUBLIC_REOWN_PROJECT_ID` is empty, wallet connect controls intentionally stay disabled.
+
 ## Development
 
 `npm run dev` validates local runtime env, clears stale `.next` output, builds, and starts the app exactly like production. Use `.env.local` for real local values; Vercel encrypted or sensitive env vars can pull as empty strings, so do not assume `vercel env pull` produced a usable local file.
@@ -88,6 +103,7 @@ Stock context comes from free/no-secret feeds: Stooq public quote CSVs, Yahoo Ch
 ```bash
 npm install
 npm run env:check
+npm run lint
 npm run dev
 npm run build
 ```
