@@ -21,8 +21,8 @@ const InteractiveStockChart = React.lazy(() =>
 const JOURNAL_STORAGE_KEY = "hermes-post-trade-journal";
 const HERMES_PROGRESS = {
   boot: { percent: 8, label: "Loading stock desk", detail: "Preparing the Robinhood token catalog." },
-  sources: { percent: 28, label: "Checking public sources", detail: "Reading health, supported stocks, and route readiness." },
-  intel: { percent: 58, label: "Building stock context", detail: "Loading quotes, filings, calendars, Kalshi, and source checks." },
+  sources: { percent: 28, label: "Checking market context", detail: "Reading supported stocks and route readiness." },
+  intel: { percent: 58, label: "Building stock context", detail: "Loading quotes, filings, calendars, and markets." },
   model: { percent: 82, label: "Hermes model running", detail: "The frontend is ready while Hermes finishes the research output." },
   ready: { percent: 100, label: "Hermes output ready", detail: "Research output is available." },
   degraded: { percent: 100, label: "Hermes output degraded", detail: "Using deterministic stock context until Hermes responds cleanly." }
@@ -521,7 +521,6 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
     decision?.reason ||
     (loading ? "Hermes is collecting market, filing, quote, and route evidence before returning a decision." : `${stock.symbol} selected. Contract is ready for Robinhood testnet quote prep.`);
   const reasoningPoints = splitReasoningText(reasoning);
-  const voteSource = hermesOutput?.vote_source === "openrouter" && llmStockVote ? "OpenRouter vote" : "Deterministic vote";
   const nextStep = llmStockVote?.user_action || decision?.user_action;
 
   return (
@@ -595,7 +594,6 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
           <div className="score-reasoning">
             <div className="score-reasoning-head">
               <span>{loading ? "Hermes model running" : `${stock.symbol} final vote`}</span>
-              {!loading ? <small>{voteSource}</small> : null}
             </div>
             <div className="reasoning-point-list">
               {stockEvidenceRows.length
@@ -640,7 +638,6 @@ function HermesFinalOutput({ hermesOutput, loading }) {
   const niceReply = cleanHermesText(hermesOutput?.nice_reply || hermesOutput?.text_output || "");
   const sections = parseHermesReplySections(reply);
   const votes = hermesOutput?.llm_vote?.stocks || hermesOutput?.hermes_decision?.stocks || [];
-  const sourceLabel = hermesOutput?.reply_source === "openrouter" ? "LLM vote" : "Fallback";
   if (loading || (!niceReply && (!reply || !sections.length))) return null;
 
   return (
@@ -649,13 +646,11 @@ function HermesFinalOutput({ hermesOutput, loading }) {
         <div className="hermes-final-header">
           <div>
             <span>Hermes output</span>
-            <h3>OpenRouter final vote</h3>
+            <h3>Final vote</h3>
           </div>
-          <span className="hermes-source-pill">{sourceLabel}</span>
         </div>
         {niceReply ? (
           <div className="hermes-nice-output">
-            <span>Ready text</span>
             <p>{niceReply}</p>
           </div>
         ) : null}
@@ -950,10 +945,6 @@ function EarningsBacktestTable({ stock, backtest, loading }) {
           ) : (
             <p className="module-empty">No backtest rows returned for {stock?.symbol || "this stock"}.</p>
           )}
-          <div className="source-footnote">
-            <span>Sources</span>
-            <p>Yahoo Chart OHLC, GDELT event-window headlines, Kalshi public markets, and OpenRouter analysis.</p>
-          </div>
         </>
       ) : null}
     </section>
@@ -974,11 +965,6 @@ function getHermesContext(stock, hermesOutput) {
     (token) => token.routed_by_agent && token.address?.toLowerCase() === stock.address?.toLowerCase()
   );
   return { intel, decision, recommendation, calendar, price, filing, news, kalshi, explorerConfirmed };
-}
-
-function sourceHealthText(intel) {
-  const degraded = intel?.pipeline?.degraded_sources || [];
-  return degraded.length ? `Degraded: ${degraded.join(", ")}` : "Sources OK";
 }
 
 function WhyRoutePanel({ stock, payToken, side, wallet, connectedToRobinhood, quote, quoteTransactions, hermesOutput }) {
@@ -1075,7 +1061,7 @@ function PredictionMarketOverlay({ stock, hermesOutput }) {
           })}
         </div>
       ) : (
-        <p className="empty-module-note">Hermes did not find a machine-readable Kalshi market cleanly tied to this stock.</p>
+        <p className="empty-module-note">No matching Kalshi market found for this stock.</p>
       )}
     </section>
   );
@@ -1085,11 +1071,7 @@ function previewHermesOutput(intel) {
   return {
     reply: intel?.hermes_decision?.summary || "Hermes is building the model-written research output.",
     hermes_decision: intel?.hermes_decision,
-    data: intel,
-    tool_trace: [
-      { name: "buildStockIntel", ok: Boolean(intel?.ok), degraded_sources: intel?.pipeline?.degraded_sources || [] },
-      { name: "openrouter_chat", ok: false, pending: true }
-    ]
+    data: intel
   };
 }
 
@@ -1114,7 +1096,7 @@ function PostTradeJournal({ entries, stock }) {
               </div>
               <p>{entry.side?.toUpperCase()} {entry.amount || "0"} {entry.sourceSymbol} → {entry.targetSymbol}</p>
               <small>
-                Hermes {entry.hermesAction || "n/a"} · {formatConfidence(entry.hermesConfidence)} · {entry.sourceHealth || "source state unknown"}
+                Hermes {entry.hermesAction || "n/a"} · {formatConfidence(entry.hermesConfidence)}
               </small>
               {entry.hashes?.length ? (
                 <div className="journal-links">
@@ -1512,7 +1494,7 @@ function App() {
 
   function appendJournalEntry(status, extra = {}) {
     if (!stock) return;
-    const { intel, decision } = getHermesContext(stock, hermesOutput);
+    const { decision } = getHermesContext(stock, hermesOutput);
     const entry = {
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       timestamp: new Date().toISOString(),
@@ -1525,8 +1507,6 @@ function App() {
       wallet,
       hermesAction: decision?.action,
       hermesConfidence: decision?.confidence,
-      sourceHealth: sourceHealthText(intel),
-      degradedSources: intel?.pipeline?.degraded_sources || [],
       quoteSummary: extra.quote ? {
         ok: extra.quote.ok,
         message: extra.quote.message || extra.quote.error || null
