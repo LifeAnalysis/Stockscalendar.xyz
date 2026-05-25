@@ -613,6 +613,9 @@ function formatKalshiVolume(value) {
   const number = Number(value);
   if (!Number.isFinite(number)) return String(value);
   if (number <= 0) return "n/a";
+  if (number >= 1_000_000_000) return `${(number / 1_000_000_000).toLocaleString("en-US", { maximumFractionDigits: 1 })}B`;
+  if (number >= 1_000_000) return `${(number / 1_000_000).toLocaleString("en-US", { maximumFractionDigits: 1 })}M`;
+  if (number >= 1_000) return `${(number / 1_000).toLocaleString("en-US", { maximumFractionDigits: 1 })}K`;
   return number.toLocaleString("en-US", { maximumFractionDigits: 0 });
 }
 
@@ -755,14 +758,21 @@ function HermesDataTable({ stocks, hermesOutput }) {
 function EarningsBacktestTable({ stock, backtest, loading }) {
   const [expanded, setExpanded] = React.useState(false);
   const rows = backtest?.rows || [];
+  const actionLabel = loading ? "In progress" : expanded ? "Collapse" : "Expand";
   return (
-    <section className={`hermes-module earnings-backtest ${expanded ? "expanded" : ""}`} aria-label="Hermes backtest">
+    <section className={`hermes-module earnings-backtest ${expanded ? "expanded" : ""} ${loading ? "loading" : ""}`} aria-label="Hermes backtest">
       <button className="backtest-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
         <div>
-          <h3>Hermes Backtest</h3>
+          <div className="menu-title-row">
+            <span className="menu-title-square-icon backtest-title-icon" aria-hidden="true"></span>
+            <h3>Hermes Backtest</h3>
+          </div>
           <span>{loading ? "Running" : rows.length ? "Previous 3 earnings" : "No rows yet"}</span>
         </div>
-        {expanded ? <MinusIcon /> : <PlusIcon />}
+        <span className={`expand-action ${loading ? "loading" : ""}`} aria-busy={loading ? "true" : undefined}>
+          <span>{actionLabel}</span>
+          {loading ? null : expanded ? <MinusIcon /> : <PlusIcon />}
+        </span>
       </button>
       {expanded ? (
         <>
@@ -1060,7 +1070,10 @@ function DataProvenanceView({ hermesOutput }) {
     <section className={`hermes-module provenance-view ${expanded ? "expanded" : ""}`} aria-label="Data provenance">
       <div className="module-head">
         <div>
-          <h3>Data Feed</h3>
+          <div className="menu-title-row">
+            <span className="menu-title-square-icon data-feed-title-icon" aria-hidden="true"></span>
+            <h3>Data Feed</h3>
+          </div>
         </div>
         <button className="provenance-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
           <span>{expanded ? "Collapse" : "Expand"}</span>
@@ -1192,15 +1205,25 @@ function EarningsCalendar({ events, stocks, monthDate, onMonthChange, onSelectSt
     <section className={`earnings-calendar ${expanded ? "expanded" : ""}`} aria-label="Supported stock earnings calendar">
       <div className="earnings-calendar-toolbar">
         <button className="calendar-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
-          <span>Earnings Calendar</span>
-          {expanded ? <MinusIcon /> : <PlusIcon />}
+          <div className="menu-title-row">
+            <MotionAsset src="/media/icons/wallet-connect-orb.mp4" webmSrc="/media/icons/wallet-connect-orb.webm" className="menu-title-motion" />
+            <span className="menu-title-text">Earnings Calendar</span>
+          </div>
+          <span className="expand-action">
+            <span>{expanded ? "Collapse" : "Expand"}</span>
+            {expanded ? <MinusIcon /> : <PlusIcon />}
+          </span>
         </button>
-        <button className="calendar-icon-button" type="button" aria-label="Previous month" onClick={() => onMonthChange(addMonths(monthDate, -1))}>
-          <ChevronLeftIcon />
-        </button>
-        <button className="calendar-icon-button" type="button" aria-label="Next month" onClick={() => onMonthChange(addMonths(monthDate, 1))}>
-          <ChevronRightIcon />
-        </button>
+        {expanded ? (
+          <>
+            <button className="calendar-icon-button" type="button" aria-label="Previous month" onClick={() => onMonthChange(addMonths(monthDate, -1))}>
+              <ChevronLeftIcon />
+            </button>
+            <button className="calendar-icon-button" type="button" aria-label="Next month" onClick={() => onMonthChange(addMonths(monthDate, 1))}>
+              <ChevronRightIcon />
+            </button>
+          </>
+        ) : null}
       </div>
       {expanded ? (
         <>

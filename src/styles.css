@@ -896,10 +896,11 @@ select {
   padding: 0;
   text-align: left;
   min-width: 0;
+  width: 100%;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  justify-items: center;
+  justify-items: stretch;
   gap: 8px;
 }
 
@@ -918,12 +919,13 @@ select {
 }
 
 .stock-top {
+  width: 100%;
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
-  justify-items: center;
-  gap: 7px;
-  text-align: center;
+  justify-items: stretch;
+  gap: 10px;
+  text-align: left;
 }
 
 .mini-stock-chart {
@@ -940,6 +942,7 @@ select {
 }
 
 .ticker {
+  justify-self: end;
   font-size: 12px;
   font-weight: 400;
   line-height: 1;
@@ -1132,9 +1135,9 @@ select {
 
 .score-head {
   display: grid;
-  grid-template-columns: 232px minmax(0, 1fr);
+  grid-template-columns: 330px minmax(0, 1fr);
   align-items: stretch;
-  gap: 18px;
+  gap: 26px;
 }
 
 .score-left {
@@ -1200,20 +1203,21 @@ select {
 
 .score-radial {
   --primary: #ccff00;
-  width: 220px;
-  height: 144px;
-  flex: 0 0 220px;
+  width: 320px;
+  height: 208px;
+  flex: 0 0 320px;
   overflow: hidden;
   color: var(--foreground);
 }
 
 .score-radial svg {
-  transform: translateY(-12px);
+  transform: translateY(-4px) scale(1.2);
+  transform-origin: center center;
 }
 
 .score-radial-value {
   fill: var(--card-foreground);
-  font-size: 30px;
+  font-size: 34px;
   font-weight: 950;
 }
 
@@ -1368,6 +1372,58 @@ select {
   line-height: 1.05;
 }
 
+.menu-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.menu-title-motion {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  object-fit: cover;
+}
+
+.menu-title-square-icon {
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border: 1px solid var(--border);
+  border-radius: 0;
+  background:
+    linear-gradient(90deg, transparent 46%, #202621 46% 54%, transparent 54%),
+    linear-gradient(0deg, transparent 46%, #202621 46% 54%, transparent 54%),
+    radial-gradient(circle at 50% 50%, #ccff00 0 34%, transparent 35%),
+    #f6f6f2;
+}
+
+.expand-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-height: 34px;
+  border: 1px solid var(--border);
+  background: #ffffff;
+  color: var(--foreground);
+  padding: 0 9px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.expand-action span {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
 .module-head > span {
   border: 1px solid var(--border);
   background: #ffffff;
@@ -1401,7 +1457,7 @@ select {
   text-align: left;
 }
 
-.backtest-toggle div {
+.backtest-toggle > div {
   display: grid;
   gap: 4px;
 }
@@ -1419,7 +1475,24 @@ select {
   line-height: 1.3;
 }
 
-.backtest-toggle svg {
+.backtest-toggle > .expand-action {
+  color: var(--foreground);
+}
+
+.backtest-toggle > .expand-action.loading {
+  border-color: var(--primary);
+  background: color-mix(in oklab, var(--primary) 18%, #ffffff);
+  color: var(--foreground);
+}
+
+.backtest-toggle .expand-action span {
+  color: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+
+.backtest-toggle svg,
+.expand-action svg {
   width: 18px;
   height: 18px;
   stroke: var(--foreground);
@@ -1662,13 +1735,15 @@ select {
 
 .reasoning-graph-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) minmax(248px, 310px);
+  align-items: stretch;
   gap: 12px;
   min-height: 380px;
 }
 
 .reasoning-graph-canvas {
   min-height: 380px;
+  height: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
   background:
@@ -1683,6 +1758,7 @@ select {
   flex-direction: column;
   gap: 9px;
   min-width: 0;
+  min-height: 380px;
   border: 1px solid var(--border);
   background: #ffffff;
   padding: 12px;
@@ -1706,11 +1782,12 @@ select {
   margin: 0;
   color: var(--muted-foreground);
   font-size: 13px;
-  line-height: 1.42;
+  line-height: 1.45;
 }
 
 .reasoning-node-panel a {
   width: fit-content;
+  margin-top: auto;
   border: 1px solid var(--foreground);
   background: var(--foreground);
   color: #ffffff;
@@ -1905,14 +1982,14 @@ select {
 .kalshi-market-title {
   display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 4px;
   font-size: 28px;
   font-weight: 400;
   line-height: 1;
 }
 
 .kalshi-market-title img {
-  width: 88px;
+  width: 80px;
   height: auto;
   display: block;
 }
@@ -2182,10 +2259,14 @@ select {
   min-width: 0;
   min-height: 56px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
+}
+
+.earnings-calendar.expanded .earnings-calendar-toolbar {
+  grid-template-columns: minmax(0, 1fr) auto auto;
 }
 
 .earnings-calendar-toolbar button,
@@ -2203,8 +2284,11 @@ select {
 
 .calendar-toggle {
   justify-self: stretch;
+  width: 100%;
   display: grid !important;
-  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  justify-items: stretch;
   justify-content: start;
   gap: 10px;
   border: 0 !important;
@@ -2213,7 +2297,15 @@ select {
   text-align: left;
 }
 
-.calendar-toggle span {
+.calendar-toggle .menu-title-row {
+  justify-self: start;
+}
+
+.calendar-toggle .expand-action {
+  justify-self: end;
+}
+
+.calendar-toggle .menu-title-text {
   color: var(--foreground);
   font-size: 22px;
   font-weight: 400;
@@ -2829,6 +2921,14 @@ select {
     grid-template-columns: repeat(5, minmax(72px, 1fr));
     gap: 8px;
   }
+
+  .reasoning-graph-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .reasoning-node-panel {
+    min-height: 0;
+  }
 }
 
 @media (max-width: 760px) {
@@ -2853,7 +2953,7 @@ select {
   }
 
   .stock-top {
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: auto minmax(0, 1fr);
   }
 
   .stock-card .logo {
@@ -3127,13 +3227,13 @@ select {
 
 .kalshi-market-title {
   align-items: center;
-  gap: 10px;
-  font-size: 28px;
+  gap: 4px;
+  font-size: 26px;
   line-height: 1;
 }
 
 .kalshi-market-title img {
-  width: 102px;
+  width: 84px;
   height: 30px;
   object-fit: cover;
   object-position: left center;
@@ -3194,8 +3294,8 @@ select {
   }
 
   .stock-top {
-    justify-items: center;
-    gap: 4px;
+    justify-items: stretch;
+    gap: 6px;
   }
 
   .stock-card .logo {
@@ -3246,7 +3346,8 @@ select {
   }
 
   .score-radial {
-    width: 100%;
+    width: min(100%, 320px);
+    height: 208px;
     flex-basis: auto;
   }
 

@@ -28,6 +28,62 @@ function kalshiMarketUrl(market) {
   return ticker ? `https://kalshi.com/markets/${encodeURIComponent(ticker)}` : null;
 }
 
+function nodeDimensions(node) {
+  const label = String(node.label || "");
+  const width = Math.max(118, Math.min(190, label.length * 8 + 34));
+  const height = node.type === "decision" ? 70 : label.length > 22 ? 64 : 54;
+  return { width, height };
+}
+
+function describeNode(node) {
+  if (!node) return "";
+  if (node.description) return node.description;
+  const label = node.label || "This node";
+  const detail = node.detail || "No additional source detail is available yet.";
+  const descriptions = {
+    decision: `${label} is Hermes' current stance for the selected stock. It combines route readiness with public quote, filing, calendar, Kalshi, and source-health evidence.`,
+    route: `${label} confirms whether the selected stock has an official Robinhood Chain contract that Hermes is allowed to route against.`,
+    source: `${label} is an external evidence source. Hermes uses it as supporting context, not as permission to execute a trade.`,
+    signal: `${label} is an interpreted signal derived from source data. It can improve timing or confidence, but it still depends on clean route and source checks.`,
+    risk: `${label} marks degraded or missing context that should lower confidence until the source recovers.`,
+    missing: `${label} shows evidence Hermes expected but could not cleanly load for this stock.`
+  };
+  return `${descriptions[node.type] || descriptions.source} ${detail}`;
+}
+
+function NodeDetailPanel({ node }) {
+  const detailPoints = splitDetail(node?.detail);
+  return (
+    <aside className="reasoning-node-panel" aria-live="polite" aria-label="Selected evidence node details">
+      <span>{node?.typeLabel || "Evidence"}</span>
+      <strong>{node?.label || "Select a node"}</strong>
+      <p>{describeNode(node)}</p>
+      {detailPoints.length ? (
+        <div className="reasoning-node-detail-list">
+          {detailPoints.map((point) => (
+            <p key={point}>{point}</p>
+          ))}
+        </div>
+      ) : null}
+      {node?.href ? (
+        <a href={node.href} target="_blank" rel="noreferrer">
+          Open source
+        </a>
+      ) : null}
+    </aside>
+  );
+}
+
+function splitDetail(value) {
+  const text = String(value || "").trim();
+  if (!text) return [];
+  return text
+    .split(/(?: · |;\s+|\.\s+)/)
+    .map((part) => part.trim().replace(/\.$/, ""))
+    .filter(Boolean)
+    .slice(0, 4);
+}
+
 function RotateCcwIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -40,13 +96,16 @@ function RotateCcwIcon() {
 function addNode(nodes, node) {
   if (!node?.id || nodes.some((item) => item.data.id === node.id)) return;
   const meta = NODE_TYPES[node.type] || NODE_TYPES.source;
+  const dimensions = nodeDimensions(node);
   nodes.push({
     data: {
       ...node,
       typeLabel: meta.label,
       color: meta.color,
       textColor: meta.text,
-      weight: node.weight || (node.type === "decision" ? 46 : node.type === "source" ? 28 : 34)
+      weight: node.weight || (node.type === "decision" ? 46 : node.type === "source" ? 28 : 34),
+      width: node.width || dimensions.width,
+      height: node.height || dimensions.height
     }
   });
 }
@@ -218,6 +277,11 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
   const containerRef = React.useRef(null);
   const cyRef = React.useRef(null);
   const graph = React.useMemo(() => buildGraph(stock, hermesOutput, loading), [stock, hermesOutput, loading]);
+  const [selectedNode, setSelectedNode] = React.useState(graph.selected);
+
+  React.useEffect(() => {
+    setSelectedNode(graph.selected);
+  }, [graph]);
 
   React.useEffect(() => {
     if (!containerRef.current) return undefined;
@@ -227,8 +291,8 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
       elements: [...graph.nodes, ...graph.edges],
       autoungrabify: false,
       boxSelectionEnabled: false,
-      maxZoom: 1,
-      minZoom: 1,
+      maxZoom: 1.25,
+      minZoom: 0.1,
       panningEnabled: false,
       userPanningEnabled: false,
       userZoomingEnabled: false,
@@ -243,16 +307,19 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
             color: "data(textColor)",
             content: "data(label)",
             "font-family": "Helvetica, Arial, sans-serif",
-            "font-size": 10,
-            "font-weight": 400,
-            height: "data(weight)",
+            "font-size": 12,
+            "font-weight": 500,
+            height: "data(height)",
             "min-zoomed-font-size": 6,
             "overlay-opacity": 0,
+            shape: "round-rectangle",
             "text-halign": "center",
-            "text-max-width": 82,
+            "text-margin-x": 0,
+            "text-margin-y": 0,
+            "text-max-width": 150,
             "text-valign": "center",
             "text-wrap": "wrap",
-            width: "data(weight)"
+            width: "data(width)"
           }
         },
         {
@@ -266,16 +333,17 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
           selector: "edge",
           style: {
             "curve-style": "bezier",
-            "font-size": 8,
+            "font-size": 11,
+            "font-weight": 500,
             "label": "data(label)",
             "line-color": "#8e9690",
             "target-arrow-color": "#8e9690",
             "target-arrow-shape": "triangle",
             "text-background-color": "#ffffff",
-            "text-background-opacity": 0.82,
-            "text-background-padding": 2,
+            "text-background-opacity": 0.9,
+            "text-background-padding": 4,
             "text-rotation": "autorotate",
-            width: 1
+            width: 1.4
           }
         },
         {
@@ -295,20 +363,52 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
         }
       ],
       layout: {
-        name: "cose",
-        animate: true,
-        animationDuration: 520,
-        animationEasing: "ease-out",
+        name: "concentric",
+        animate: false,
+        avoidOverlap: true,
         fit: true,
-        padding: 22,
-        nodeRepulsion: 7800,
-        idealEdgeLength: 92,
-        edgeElasticity: 90
+        padding: 50,
+        minNodeSpacing: 38,
+        concentric: (node) => {
+          if (node.id() === "decision") return 3;
+          if (node.data("type") === "route" || node.data("type") === "signal") return 2;
+          return 1;
+        },
+        levelWidth: () => 1
       }
     });
 
+    const centerGraph = () => {
+      cy.resize();
+      cy.fit(cy.elements(), 56);
+      cy.center();
+    };
+    const initialNode = cy.getElementById(graph.selected?.id || "decision");
+    if (initialNode.length) initialNode.select();
+    cy.on("layoutstop", centerGraph);
+    cy.ready(centerGraph);
+    cy.on("tap", "node", (event) => {
+      const data = event.target.data();
+      setSelectedNode(data);
+      event.target.select();
+    });
+    cy.on("tap", (event) => {
+      if (event.target === cy) {
+        const decisionNode = cy.getElementById("decision");
+        if (decisionNode.length) {
+          decisionNode.select();
+          setSelectedNode(decisionNode.data());
+        }
+      }
+    });
+
+    const resizeObserver =
+      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => window.requestAnimationFrame(centerGraph)) : null;
+    if (resizeObserver) resizeObserver.observe(containerRef.current);
+
     cyRef.current = cy;
     return () => {
+      if (resizeObserver) resizeObserver.disconnect();
       cy.destroy();
       cyRef.current = null;
     };
@@ -316,7 +416,7 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
 
   const resetGraph = React.useCallback(() => {
     if (!cyRef.current) return;
-    cyRef.current.fit(undefined, 28);
+    cyRef.current.fit(cyRef.current.elements(), 56);
     cyRef.current.center();
   }, []);
 
@@ -333,6 +433,7 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
       </div>
       <div className="reasoning-graph-layout">
         <div className="reasoning-graph-canvas" ref={containerRef} role="img" aria-label="Linked Hermes sources and decision evidence"></div>
+        <NodeDetailPanel node={selectedNode} />
       </div>
       <div className="reasoning-graph-legend" aria-label="Evidence graph legend">
         {Object.entries(NODE_TYPES).map(([key, value]) => (
