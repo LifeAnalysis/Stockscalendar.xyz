@@ -561,7 +561,42 @@ function buildHermesDecision(
   };
 }
 
-export async function buildStockIntel() {
+type StockIntel = Awaited<ReturnType<typeof computeStockIntel>>;
+
+const INTEL_CACHE_KEY = "stock_intel";
+const intelCache = new Map<string, { expires: number; promise: Promise<StockIntel> }>();
+
+function intelCacheTtlMs(): number {
+  return timeoutMs("INTEL_CACHE_TTL_MS", 60000);
+}
+
+export async function buildStockIntel(options: { bypassCache?: boolean } = {}) {
+  const ttl = intelCacheTtlMs();
+  const now = Date.now();
+
+  if (!options.bypassCache && ttl > 0) {
+    const cached = intelCache.get(INTEL_CACHE_KEY);
+    if (cached && cached.expires > now) {
+      return cached.promise;
+    }
+  }
+
+  const promise = computeStockIntel();
+
+  if (ttl > 0) {
+    intelCache.set(INTEL_CACHE_KEY, { expires: now + ttl, promise });
+    // Evict on failure so a rejected fetch isn't served from cache.
+    promise.catch(() => {
+      if (intelCache.get(INTEL_CACHE_KEY)?.promise === promise) {
+        intelCache.delete(INTEL_CACHE_KEY);
+      }
+    });
+  }
+
+  return promise;
+}
+
+async function computeStockIntel() {
   const [kalshi, calendars, explorerDiscovery, stockSignals] = await Promise.all([
     sourceTimeout(matchStockMarkets(robinhoodStockTokens), timeoutMs("KALSHI_SOURCE_TIMEOUT_MS", 30000), kalshiTimeoutFallback()),
     sourceTimeout(fetchStockCalendars(robinhoodStockTokens), timeoutMs("CALENDAR_SOURCE_TIMEOUT_MS", 8000), calendarTimeoutFallback()),

@@ -443,9 +443,9 @@ async function askHermes(message: string, intel: Awaited<ReturnType<typeof build
   };
 }
 
-export async function buildHermesOutput(message = DEFAULT_HERMES_OUTPUT_PROMPT, options: { debug?: boolean } = {}) {
+export async function buildHermesOutput(message = DEFAULT_HERMES_OUTPUT_PROMPT, options: { debug?: boolean; bypassCache?: boolean } = {}) {
   try {
-    const intel = await buildStockIntel();
+    const intel = await buildStockIntel({ bypassCache: options.bypassCache });
     const chat = await askHermes(message, intel);
     const finalDecision = chat.vote ? buildOpenRouterDecision(chat.vote, intel) : intel.hermes_decision;
     const replySource = chat.vote ? "openrouter" : "fallback";
