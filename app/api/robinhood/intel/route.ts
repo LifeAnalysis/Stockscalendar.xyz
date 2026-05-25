@@ -6,6 +6,6 @@ export const maxDuration = 60;
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const intel = await buildStockIntel();
+  const intel = await buildStockIntel({ bypassCache: searchParams.get("cache") === "0" });
   return jsonResponse(searchParams.get("compact") === "1" ? compactStockIntel(intel) : intel);
 }

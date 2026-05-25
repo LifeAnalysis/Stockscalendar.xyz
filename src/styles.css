@@ -1098,6 +1098,13 @@ select {
   gap: 8px;
 }
 
+.score-left-overlay-off .score-radial,
+.score-left-overlay-off .score-copy {
+  opacity: 0.32;
+  filter: grayscale(1);
+  pointer-events: none;
+}
+
 .score-copy {
   display: grid;
   gap: 5px;
@@ -1302,6 +1309,29 @@ select {
   color: var(--foreground) !important;
   padding: 0 10px;
   white-space: nowrap;
+}
+
+.hermes-nice-output {
+  display: grid;
+  gap: 8px;
+  border: 1px solid color-mix(in oklab, var(--foreground) 12%, var(--border));
+  background: color-mix(in oklab, var(--paper-strong) 76%, #ffffff);
+  padding: 14px;
+}
+
+.hermes-nice-output span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.hermes-nice-output p {
+  margin: 0;
+  color: var(--foreground);
+  font-size: 15px;
+  line-height: 1.52;
+  white-space: pre-line;
 }
 
 .hermes-final-sections {
@@ -3255,14 +3285,6 @@ select {
   line-height: 1.45;
 }
 
-.score-why {
-  display: grid;
-  gap: 10px;
-  border-left: 3px solid var(--foreground);
-  background: color-mix(in oklab, #ffffff 82%, var(--primary));
-  padding: 11px 13px;
-}
-
 .score-why-label {
   color: var(--foreground);
   font-size: 11px;
@@ -3279,61 +3301,7 @@ select {
   line-height: 1.45;
 }
 
-.score-why-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.score-why-chip {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 6px;
-  border: 1px solid var(--border);
-  border-left: 3px solid #ccff00;
-  background: rgba(246, 246, 242, 0.72);
-  padding: 4px 8px;
-}
-
-.score-why-chip-label {
-  color: var(--foreground);
-  font-size: 11px;
-  font-weight: 850;
-}
-
-.score-why-chip-points {
-  color: var(--muted-foreground);
-  font-size: 11px;
-  font-weight: 750;
-  font-variant-numeric: tabular-nums;
-}
-
-.score-why-chip-empty {
-  border-left-color: var(--border);
-  opacity: 0.5;
-}
-
-.score-why-chip-empty .score-why-chip-points {
-  color: var(--muted-foreground);
-}
-
 /* --- Adjust-bias controls (Phase 2) --- */
-.score-why-headline {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 6px;
-}
-
-.score-why-total {
-  font-size: 12px;
-  font-weight: 900;
-  color: var(--foreground);
-  letter-spacing: 0.01em;
-  font-variant-numeric: tabular-nums;
-}
-
 .score-why-adjusted {
   margin-left: 6px;
   font-size: 10px;
@@ -3341,13 +3309,6 @@ select {
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--primary);
-}
-
-.score-left-overlay-off .score-radial,
-.score-left-overlay-off .score-copy {
-  opacity: 0.32;
-  filter: grayscale(1);
-  pointer-events: none;
 }
 
 .score-bias-toggle {
