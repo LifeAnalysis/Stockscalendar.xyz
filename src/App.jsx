@@ -517,7 +517,7 @@ function buildScoreSentence(components, total) {
   return `Score ${total}/100 — ${contributorPhrase}.${missingPhrase}`;
 }
 
-function HermesOutputBar({ stock, hermesOutput, loading, progress }) {
+function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = true }) {
   const score = Math.max(0, Math.min(stock.score || 0, 100));
   const decision = hermesOutput?.hermes_decision?.stocks?.find((item) => item.symbol === stock.symbol);
   const llmStockVote = hermesOutput?.llm_vote?.stocks?.find((item) => item.symbol === stock.symbol);
@@ -541,6 +541,7 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress }) {
         .map((line) => line.trim())
         .filter((line) => line && !line.startsWith(`${stock.symbol}:`) && !line.startsWith(`${stock.symbol} -`))
     : [];
+  const KEEP_EVIDENCE_LABELS = new Set(["take", "call"]);
   const stockEvidenceRows = stockReplyLines
     .filter((line) => !line.startsWith("Next:"))
     .map((line) => {
@@ -548,7 +549,8 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress }) {
       return splitAt > 0
         ? { label: line.slice(0, splitAt), value: line.slice(splitAt + 1).trim() }
         : { label: "Note", value: line };
-    });
+    })
+    .filter((row) => KEEP_EVIDENCE_LABELS.has(row.label.trim().toLowerCase()));
   const stockReplyReason = stockEvidenceRows.map((row) => `${row.label}: ${row.value}`).join("\n");
   const reasoning =
     stockReplyReason ||
@@ -558,63 +560,12 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress }) {
   const reasoningPoints = splitReasoningText(reasoning);
   const voteSource = hermesOutput?.vote_source === "openrouter" && llmStockVote ? "OpenRouter vote" : "Deterministic vote";
   const nextStep = llmStockVote?.user_action || decision?.user_action;
-  const scoreBreakdown = Array.isArray(decision?.score_breakdown) ? decision.score_breakdown : [];
-  const scoreExplanation = decision?.score_explanation;
-
-  // --- Adjust-bias controls (client-side re-score only, zero API/LLM) ---
-  // Weights are keyed by stock symbol so switching the selected stock never
-  // bleeds one stock's bias into another.
-  const symbol = stock.symbol;
-  const [biasOpen, setBiasOpen] = React.useState(false);
-  const [biasState, setBiasState] = React.useState({});
-  const stockBias = biasState[symbol] || { weights: {}, overlay: true };
-  const weights = stockBias.weights;
-  const overlayOn = stockBias.overlay !== false;
-
-  const setWeight = (key, value) => {
-    setBiasState((prev) => {
-      const current = prev[symbol] || { weights: {}, overlay: true };
-      return {
-        ...prev,
-        [symbol]: { ...current, weights: { ...current.weights, [key]: value } },
-      };
-    });
-  };
-  const setOverlay = (value) => {
-    setBiasState((prev) => {
-      const current = prev[symbol] || { weights: {}, overlay: true };
-      return { ...prev, [symbol]: { ...current, overlay: value } };
-    });
-  };
-  const resetBias = () => {
-    setBiasState((prev) => ({ ...prev, [symbol]: { weights: {}, overlay: true } }));
-  };
-
-  const weightFor = (key) => {
-    const w = weights[key];
-    return typeof w === "number" ? w : 1;
-  };
-  const adjustedBreakdown = scoreBreakdown.map((component) => ({
-    ...component,
-    points: Math.round((component.points || 0) * weightFor(component.key)),
-  }));
-  const adjustedTotal = Math.min(
-    95,
-    adjustedBreakdown.reduce((sum, component) => sum + component.points, 0),
-  );
-  const biasDirty =
-    scoreBreakdown.some((component) => weightFor(component.key) !== 1) || !overlayOn;
-  const weightsDirty = scoreBreakdown.some((component) => weightFor(component.key) !== 1);
-  const adjustedSentence = buildScoreSentence(adjustedBreakdown, adjustedTotal);
-  // When weights are dirty use the live adjusted view; otherwise keep Phase 1 data verbatim.
-  const displayBreakdown = weightsDirty ? adjustedBreakdown : scoreBreakdown;
-  const headlineSentence = weightsDirty ? adjustedSentence : scoreExplanation;
 
   return (
     <div className="cn-card score-card">
       <div className="cn-card-content">
         <div className="score-head">
-          <div className={`score-left ${overlayOn ? "" : "score-left-overlay-off"}`}>
+          <div className={`score-left${overlay ? "" : " score-left-overlay-off"}`}>
             <div className="score-radial" aria-label={`Hermes confidence ${displayScore}%`}>
             <svg cx="50%" cy="50%" role="application" tabIndex="0" className="recharts-surface" width="282" height="180" viewBox="0 0 282 180" style={{ width: "100%", height: "100%", display: "block" }}>
               <title></title>
@@ -672,8 +623,8 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress }) {
             </svg>
             </div>
             <div className="score-copy">
-              <span className="score-why-label">{overlayOn ? "Hermes vote" : "Hermes vote · off"}</span>
-              <button className="score-action-pill" type="button" disabled={loading || !overlayOn}>
+              <span className="score-why-label">{overlay ? "Hermes vote" : "Hermes vote · off"}</span>
+              <button className="score-action-pill" type="button" disabled={loading}>
                 <span key={stance} className={loading ? "rotating-word" : ""}>{stance}</span>
               </button>
             </div>
@@ -683,87 +634,6 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress }) {
               <span>{loading ? "Hermes model running" : `${stock.symbol} final vote`}</span>
               {!loading ? <small>{voteSource}</small> : null}
             </div>
-            {!loading && scoreBreakdown.length ? (
-              <div className="score-why">
-                <div className="score-why-headline">
-                  <span className="score-why-label">Evidence score · rule-based tally</span>
-                  <span className="score-why-total">
-                    Evidence score {weightsDirty ? adjustedTotal : decision?.confidence ?? adjustedTotal}/100
-                    {weightsDirty ? <small className="score-why-adjusted">· adjusted</small> : null}
-                  </span>
-                </div>
-                {headlineSentence ? <p className="score-why-sentence">{headlineSentence}</p> : null}
-                <div className="score-why-chips">
-                  {displayBreakdown.map((component) => (
-                    <div
-                      className={`score-why-chip ${component.present && component.points > 0 ? "" : "score-why-chip-empty"}`}
-                      key={component.key}
-                    >
-                      <span className="score-why-chip-label">{component.label}</span>
-                      <span className="score-why-chip-points">
-                        {component.points > 0 ? `+${component.points}` : "0"} / {component.max}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-                <button
-                  type="button"
-                  className={`score-bias-toggle ${biasDirty ? "score-bias-toggle-active" : ""}`}
-                  onClick={() => setBiasOpen((open) => !open)}
-                  aria-expanded={biasOpen}
-                >
-                  {biasOpen ? "Hide bias controls" : "Adjust bias"}
-                  {biasDirty && !biasOpen ? <span className="score-bias-dot" aria-hidden="true" /> : null}
-                </button>
-                {biasOpen ? (
-                  <div className="score-bias-panel">
-                    <div className="score-bias-row score-bias-overlay">
-                      <label className="score-bias-overlay-label">
-                        <input
-                          type="checkbox"
-                          checked={overlayOn}
-                          onChange={(event) => setOverlay(event.target.checked)}
-                        />
-                        <span>Hermes overlay</span>
-                      </label>
-                      <button type="button" className="score-bias-reset" onClick={resetBias} disabled={!biasDirty}>
-                        Reset
-                      </button>
-                    </div>
-                    <div className="score-bias-sliders">
-                      {scoreBreakdown.map((component) => {
-                        const disabled = !component.present || component.points <= 0;
-                        const w = weightFor(component.key);
-                        const adjusted = Math.round((component.points || 0) * w);
-                        return (
-                          <div
-                            className={`score-bias-slider ${disabled ? "score-bias-slider-disabled" : ""}`}
-                            key={component.key}
-                          >
-                            <div className="score-bias-slider-head">
-                              <span className="score-bias-slider-label">{component.label}</span>
-                              <span className="score-bias-slider-meta">
-                                {w.toFixed(1)}× → +{adjusted}
-                              </span>
-                            </div>
-                            <input
-                              type="range"
-                              min="0"
-                              max="2"
-                              step="0.1"
-                              value={w}
-                              disabled={disabled}
-                              onChange={(event) => setWeight(component.key, Number(event.target.value))}
-                              aria-label={`${component.label} trust weight`}
-                            />
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : null}
-              </div>
-            ) : null}
             <div className="reasoning-point-list">
               {stockEvidenceRows.length
                 ? stockEvidenceRows.map((row) => (
@@ -1190,43 +1060,134 @@ function WhyRoutePanel({ stock, payToken, side, wallet, connectedToRobinhood, qu
   );
 }
 
-function ConfidenceDecomposition({ stock, hermesOutput }) {
-  const [expandedSegment, setExpandedSegment] = React.useState(null);
-  const { decision, calendar, price, filing, news, kalshi, explorerConfirmed } = getHermesContext(stock, hermesOutput);
+// Display-only metadata for each backend score component (key → color + note).
+// Colors and notes are frontend presentation; the points/max/total are the
+// single source of truth from decision.score_breakdown — never recomputed here.
+const SCORE_COMPONENT_COLORS = {
+  kalshi: "#407076",
+  calendar: "#a6979c",
+  price: "#ccff00",
+  filing: "#6b7c85",
+  news: "#d86c3f",
+  matches: "#04151f",
+};
+
+function scoreComponentNote(key, ctx) {
+  const { calendar, price, filing, news, kalshi } = ctx;
   const topMarket = kalshi?.markets?.[0];
-  const marketValue = topMarket ? Math.min(Number(topMarket.score || 0) * 5, 45) : 0;
-  const calendarValue = calendar?.ok ? 15 : 0;
-  const quoteValue = price?.ok ? 15 : 0;
-  const filingValue = filing?.ok && filing.latest_material ? 15 : 0;
-  const newsValue = Math.min((news?.article_count || 0) * 2, 10);
-  const breadthValue = Math.min((kalshi?.match_count || 0) * 2, 10);
-  const rawSegments = [
-    { label: "Market", value: marketValue, note: topMarket?.title || topMarket?.ticker || "No clean Kalshi market match.", color: "#407076" },
-    { label: "Calendar", value: calendarValue, note: calendar?.ok ? "Calendar feed returned earnings context." : "Calendar feed did not return a clean event.", color: "#a6979c" },
-    { label: "Quote", value: quoteValue, note: price?.ok ? `Quote date ${price.date || "unknown"}` : "No clean latest quote.", color: "#ccff00" },
-    { label: "SEC", value: filingValue, note: filing?.latest_material?.form ? `Latest filing ${filing.latest_material.form}` : "No recent SEC filing signal.", color: "#6b7c85" },
-    { label: "News", value: newsValue, note: news?.article_count ? `${news.article_count} recent news item(s)` : "No clean news signal.", color: "#d86c3f" },
-    { label: "Breadth", value: breadthValue, note: kalshi?.match_count ? `${kalshi.match_count} Kalshi market match(es)` : "No extra market breadth.", color: "#04151f" }
-  ];
-  const contributionTotal = Math.max(1, rawSegments.reduce((sum, segment) => sum + segment.value, 0));
-  const segments = rawSegments.map((segment) => ({
-    ...segment,
-    percent: Math.round((segment.value / contributionTotal) * 100)
+  switch (key) {
+    case "kalshi":
+      return topMarket?.title || topMarket?.ticker || "No clean Kalshi market match.";
+    case "calendar":
+      return calendar?.ok ? "Calendar feed returned earnings context." : "Calendar feed did not return a clean event.";
+    case "price":
+      return price?.ok ? `Quote date ${price.date || "unknown"}` : "No clean latest quote.";
+    case "filing":
+      return filing?.latest_material?.form ? `Latest filing ${filing.latest_material.form}` : "No recent SEC filing signal.";
+    case "news":
+      return news?.article_count ? `${news.article_count} recent news item(s)` : "No clean news signal.";
+    case "matches":
+      return kalshi?.match_count ? `${kalshi.match_count} Kalshi market match(es)` : "No extra market breadth.";
+    default:
+      return "";
+  }
+}
+
+function ConfidenceDecomposition({ stock, hermesOutput, overlay = true, onToggleOverlay }) {
+  const ctx = getHermesContext(stock, hermesOutput);
+  const { decision, explorerConfirmed } = ctx;
+  const symbol = stock?.symbol;
+
+  const [expandedSegment, setExpandedSegment] = React.useState(null);
+  const [biasOpen, setBiasOpen] = React.useState(false);
+  // Bias is keyed per stock symbol so switching the selected stock never
+  // bleeds one stock's weights into another.
+  // Weights stay local to this component, keyed per symbol. The overlay on/off
+  // flag is lifted to the parent (props) so the Hermes vote gauge stays in sync.
+  const [weightsBySymbol, setWeightsBySymbol] = React.useState({});
+  const weights = weightsBySymbol[symbol] || {};
+  const overlayOn = overlay !== false;
+
+  const setWeight = (key, value) => {
+    setWeightsBySymbol((prev) => {
+      const current = prev[symbol] || {};
+      return { ...prev, [symbol]: { ...current, [key]: value } };
+    });
+  };
+  const setOverlay = (value) => {
+    onToggleOverlay?.(value);
+  };
+  const resetBias = () => {
+    setWeightsBySymbol((prev) => ({ ...prev, [symbol]: {} }));
+    onToggleOverlay?.(true);
+  };
+  const weightFor = (key) => {
+    const w = weights[key];
+    return typeof w === "number" ? w : 1;
+  };
+
+  // Single source of truth: the backend's deterministic score_breakdown.
+  const scoreBreakdown = Array.isArray(decision?.score_breakdown) ? decision.score_breakdown : [];
+  const components = scoreBreakdown.map((component) => {
+    const weight = weightFor(component.key);
+    const adjustedPoints = Math.round((component.points || 0) * weight);
+    return {
+      ...component,
+      weight,
+      adjustedPoints,
+      color: SCORE_COMPONENT_COLORS[component.key] || "#04151f",
+      note: scoreComponentNote(component.key, ctx),
+    };
+  });
+
+  const weightsDirty = components.some((component) => component.weight !== 1);
+  const biasDirty = weightsDirty || !overlayOn;
+  const adjustedTotal = Math.min(
+    95,
+    components.reduce((sum, component) => sum + component.adjustedPoints, 0),
+  );
+  const baseTotal = decision?.confidence ?? Math.min(95, components.reduce((sum, c) => sum + (c.points || 0), 0));
+  const total = weightsDirty ? adjustedTotal : baseTotal;
+
+  const contributionTotal = Math.max(
+    1,
+    components.reduce((sum, component) => sum + component.adjustedPoints, 0),
+  );
+  const segments = components.map((component) => ({
+    key: component.key,
+    label: component.label,
+    color: component.color,
+    note: component.note,
+    points: component.adjustedPoints,
+    max: component.max,
+    percent: Math.round((component.adjustedPoints / contributionTotal) * 100),
   }));
-  const selectedSegment = segments.find((segment) => segment.label === expandedSegment);
-  const total = decision?.confidence ?? Math.min(95, contributionTotal);
-  const summaryFactors = segments.map((segment) => ({ label: segment.label, note: segment.note }));
+  const selectedSegment = segments.find((segment) => segment.key === expandedSegment);
+
+  const adjustedSentence = buildScoreSentence(
+    components.map((component) => ({ ...component, points: component.adjustedPoints })),
+    adjustedTotal,
+  );
+  const headlineSentence = weightsDirty ? adjustedSentence : decision?.score_explanation;
+
   const readinessFactors = [
     { label: "Route", note: stock?.address ? "Official Robinhood Chain stock token contract exists." : "No official stock token route is available." },
     { label: "Explorer", note: explorerConfirmed ? "Contract found in Robinhood Chain explorer discovery." : "Explorer confirmation not found yet." }
   ];
 
+  if (!components.length) return null;
+
   return (
     <div data-slot="card" data-size="default" className="cn-card confidence-panel confidence-breakdown-card">
       <div data-slot="card-content" className="cn-card-content confidence-breakdown-content">
         <div className="confidence-breakdown-head">
-          <span className="text-3xl font-semibold">{total}/100</span>
+          <span className="score-why-label">Evidence score</span>
+          <span className="text-3xl font-semibold">
+            {total}/100
+            {weightsDirty ? <small className="score-why-adjusted">· adjusted</small> : null}
+          </span>
         </div>
+        {headlineSentence ? <p className="score-why-sentence">{headlineSentence}</p> : null}
         <div className="confidence-category-stack">
           <div aria-label="Hermes confidence category bar">
             <div className="confidence-category-bar">
@@ -1236,10 +1197,10 @@ function ConfidenceDecomposition({ stock, hermesOutput }) {
                     className="confidence-category-segment"
                     type="button"
                     style={{ width: `${segment.percent}%`, backgroundColor: segment.color }}
-                    key={segment.label}
+                    key={segment.key}
                     aria-label={`${segment.label} confidence detail`}
-                    aria-expanded={selectedSegment?.label === segment.label}
-                    onClick={() => setExpandedSegment((current) => (current === segment.label ? null : segment.label))}
+                    aria-expanded={selectedSegment?.key === segment.key}
+                    onClick={() => setExpandedSegment((current) => (current === segment.key ? null : segment.key))}
                   ></button>
                 ))}
               </div>
@@ -1247,12 +1208,12 @@ function ConfidenceDecomposition({ stock, hermesOutput }) {
           </div>
           <ul className="confidence-category-legend">
             {segments.map((segment) => (
-              <li key={segment.label}>
+              <li key={segment.key}>
                 <button
                   className="confidence-legend-button"
                   type="button"
-                  aria-expanded={selectedSegment?.label === segment.label}
-                  onClick={() => setExpandedSegment((current) => (current === segment.label ? null : segment.label))}
+                  aria-expanded={selectedSegment?.key === segment.key}
+                  onClick={() => setExpandedSegment((current) => (current === segment.key ? null : segment.key))}
                 >
                   <span className="legend-swatch" style={{ backgroundColor: segment.color }}></span>
                   <span className="font-medium">{segment.percent}%</span>
@@ -1263,19 +1224,73 @@ function ConfidenceDecomposition({ stock, hermesOutput }) {
           </ul>
           {selectedSegment ? (
             <div className="confidence-segment-detail" style={{ "--segment-color": selectedSegment.color }}>
-              <span>{selectedSegment.label}</span>
+              <span>{selectedSegment.label} · +{selectedSegment.points} / {selectedSegment.max}</span>
               <div className="factor-detail-list">
                 {splitReasoningText(selectedSegment.note).map((item) => <p key={item}>{item}</p>)}
               </div>
             </div>
           ) : null}
         </div>
+        <button
+          type="button"
+          className={`score-bias-toggle ${biasDirty ? "score-bias-toggle-active" : ""}`}
+          onClick={() => setBiasOpen((open) => !open)}
+          aria-expanded={biasOpen}
+        >
+          {biasOpen ? "Hide bias controls" : "Adjust bias"}
+          {biasDirty && !biasOpen ? <span className="score-bias-dot" aria-hidden="true" /> : null}
+        </button>
+        {biasOpen ? (
+          <div className="score-bias-panel">
+            <div className="score-bias-row score-bias-overlay">
+              <label className="score-bias-overlay-label">
+                <input
+                  type="checkbox"
+                  checked={overlayOn}
+                  onChange={(event) => setOverlay(event.target.checked)}
+                />
+                <span>Hermes overlay</span>
+              </label>
+              <button type="button" className="score-bias-reset" onClick={resetBias} disabled={!biasDirty}>
+                Reset
+              </button>
+            </div>
+            <div className="score-bias-sliders">
+              {components.map((component) => {
+                const disabled = !component.present || component.points <= 0;
+                return (
+                  <div
+                    className={`score-bias-slider ${disabled ? "score-bias-slider-disabled" : ""}`}
+                    key={component.key}
+                  >
+                    <div className="score-bias-slider-head">
+                      <span className="score-bias-slider-label">{component.label}</span>
+                      <span className="score-bias-slider-meta">
+                        {component.weight.toFixed(1)}× → +{component.adjustedPoints}
+                      </span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="2"
+                      step="0.1"
+                      value={component.weight}
+                      disabled={disabled}
+                      onChange={(event) => setWeight(component.key, Number(event.target.value))}
+                      aria-label={`${component.label} trust weight`}
+                    />
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
         <div data-orientation="horizontal" role="none" data-slot="separator" className="confidence-separator"></div>
         <div className="confidence-summary">
           <span className="font-medium">{decision?.action || "Hermes"} confidence factors</span>
           <div className="confidence-summary-grid">
-            {summaryFactors.map((factor) => (
-              <article key={factor.label}>
+            {segments.map((factor) => (
+              <article key={factor.key}>
                 <span>{factor.label}</span>
                 <p>{factor.note}</p>
               </article>
@@ -1591,8 +1606,20 @@ function App() {
   const [isPreparingQuote, setIsPreparingQuote] = React.useState(false);
   const [isExecutingQuote, setIsExecutingQuote] = React.useState(false);
   const [journalEntries, setJournalEntries] = React.useState([]);
+  // Hermes overlay on/off, owned here so the ConfidenceDecomposition toggle and
+  // the HermesOutputBar gauge stay in sync. Keyed per stock symbol, default on.
+  const [overlayBySymbol, setOverlayBySymbol] = React.useState({});
 
   const stock = stocks.find((item) => item.symbol === selected);
+  const hermesOverlayOn = overlayBySymbol[stock?.symbol] ?? true;
+  const setHermesOverlay = React.useCallback(
+    (value) => {
+      const symbol = stock?.symbol;
+      if (!symbol) return;
+      setOverlayBySymbol((prev) => ({ ...prev, [symbol]: value }));
+    },
+    [stock?.symbol],
+  );
   const payToken = payTokens.find((token) => token.symbol === payTokenSymbol) || payTokens[0];
   const sourceToken = side === "sell" ? stock : payToken;
   const targetToken = side === "sell" ? payToken : stock;
@@ -2167,9 +2194,9 @@ function App() {
                 status={chartStatus}
                 selectedRange={chartRange}
               />
-              <HermesOutputBar stock={stock} hermesOutput={hermesOutput} loading={hermesLoading} progress={hermesProgress} />
+              <HermesOutputBar stock={stock} hermesOutput={hermesOutput} loading={hermesLoading} progress={hermesProgress} overlay={hermesOverlayOn} />
               <HermesFinalOutput hermesOutput={hermesOutput} loading={hermesLoading} />
-              <ConfidenceDecomposition stock={stock} hermesOutput={hermesOutput} />
+              <ConfidenceDecomposition stock={stock} hermesOutput={hermesOutput} overlay={hermesOverlayOn} onToggleOverlay={setHermesOverlay} />
               <HermesReasoningGraph stock={stock} hermesOutput={hermesOutput} loading={hermesLoading} />
               <EarningsBacktestTable stock={stock} backtest={backtests[stock.symbol]} loading={backtestStatus === "loading" && !backtests[stock.symbol]} />
               <PredictionMarketOverlay stock={stock} hermesOutput={hermesOutput} />
