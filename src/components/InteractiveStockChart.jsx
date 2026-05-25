@@ -1,186 +1,143 @@
 "use client";
 
 import React, { useMemo } from "react";
-import { Bar, CartesianGrid, ComposedChart, Line, XAxis, YAxis } from "recharts";
+import { CartesianGrid, Line, LineChart, XAxis, YAxis } from "recharts";
 import { Card, CardContent } from "./ui/card.jsx";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "./ui/chart.jsx";
 
 const chartConfig = {
+  priceData: {
+    label: "Price Data"
+  },
+  high: {
+    label: "High",
+    color: "#04151f"
+  },
   close: {
     label: "Close",
-    color: "var(--chart-1)"
+    color: "#ccff00"
   },
-  volume: {
-    label: "Volume",
-    color: "var(--chart-1)"
+  low: {
+    label: "Low",
+    color: "#407076"
   }
 };
 
-const formatMoney = (value) =>
-  new Intl.NumberFormat("en", {
-    style: "currency",
-    currency: "USD",
-    maximumFractionDigits: value >= 100 ? 2 : 4
-  }).format(value);
+function formatAxisDate(value, selectedRange) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  if (selectedRange === "1D") {
+    return `${date.getDate()} ${date.toLocaleTimeString("en-US", {
+      hour: "numeric",
+      minute: "2-digit",
+      hour12: false
+    })}`;
+  }
+  if (selectedRange === "1Y") {
+    return date.toLocaleDateString("en-US", { month: "short" });
+  }
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  });
+}
 
-const formatCompact = (value) =>
-  new Intl.NumberFormat("en", {
-    notation: "compact",
-    maximumFractionDigits: 1
-  }).format(value);
+function formatTooltipDate(value, selectedRange) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  if (selectedRange === "1D") {
+    return date.toLocaleString("en-US", {
+      month: "short",
+      day: "numeric",
+      hour: "numeric",
+      minute: "2-digit"
+    });
+  }
+  if (selectedRange === "1Y") {
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric"
+    });
+  }
+  return date.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric"
+  });
+}
 
-const rangeLabel = {
-  "1mo": "1 month",
-  "3mo": "3 months",
-  "6mo": "6 months",
-  "1y": "1 year"
-};
-
-export const InteractiveStockChart = ({ chartData, ticker, range }) => {
+export const InteractiveStockChart = ({ chartData, selectedRange }) => {
   const formattedData = useMemo(
     () =>
       chartData
-        .map((item) => ({
-          ...item,
-          dateTime: new Date(item.date).getTime()
-        }))
-        .filter((item) => !Number.isNaN(item.dateTime))
+        .map((item) => {
+          const close = Number(item.close);
+          if (!Number.isFinite(close)) return null;
+          const open = Number.isFinite(Number(item.open)) ? Number(item.open) : close;
+          const high = Number.isFinite(Number(item.high)) ? Number(item.high) : Math.max(open, close);
+          const low = Number.isFinite(Number(item.low)) ? Number(item.low) : Math.min(open, close);
+          return {
+            ...item,
+            open,
+            high,
+            low,
+            close,
+            dateTime: new Date(item.date).getTime()
+          };
+        })
+        .filter((item) => item && !Number.isNaN(item.dateTime))
         .sort((a, b) => a.dateTime - b.dateTime),
     [chartData]
   );
 
-  const closeValues = useMemo(
-    () => formattedData.map((item) => item.close).filter((value) => typeof value === "number" && Number.isFinite(value)),
-    [formattedData]
-  );
-  const volumeValues = useMemo(
-    () => formattedData.map((item) => item.volume || 0).filter((value) => typeof value === "number" && Number.isFinite(value)),
-    [formattedData]
-  );
-  const minValue = useMemo(
-    () => (closeValues.length ? Math.min(...closeValues) : 0),
-    [closeValues]
-  );
-  const maxValue = useMemo(
-    () => (closeValues.length ? Math.max(...closeValues) : 0),
-    [closeValues]
-  );
-  const maxVolume = useMemo(
-    () => (volumeValues.length ? Math.max(...volumeValues) : 0),
-    [volumeValues]
-  );
-  const firstClose = closeValues[0] || 0;
-  const lastClose = closeValues[closeValues.length - 1] || 0;
-  const absoluteChange = lastClose - firstClose;
-  const percentChange = firstClose ? (absoluteChange / firstClose) * 100 : 0;
-  const isUp = absoluteChange >= 0;
-  const pricePadding = Math.max((maxValue - minValue) * 0.16, lastClose * 0.01, 1);
+  const yDomain = useMemo(() => {
+    if (!formattedData.length) return ["auto", "auto"];
+    const values = formattedData.flatMap((item) => [item.open, item.close]).filter(Number.isFinite);
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    const range = max - min;
+    const fallbackPadding = Math.max(Math.abs(max) * 0.0025, 0.35);
+    const padding = range > 0 ? Math.max(range * 0.2, fallbackPadding) : fallbackPadding;
+    return [min - padding, max + padding];
+  }, [formattedData]);
+
+  if (!formattedData.length) return <div className="chart-fallback chart-state">Chart unavailable from Yahoo.</div>;
 
   return (
     <Card className="interactive-stock-chart">
-      <div className="stock-chart-card-header">
-        <div>
-          <div className="stock-chart-card-title">{ticker || "Stock"} price</div>
-          <div className="stock-chart-card-description">
-            Yahoo historical close with volume{rangeLabel[range] ? `, ${rangeLabel[range]}` : ""}
-          </div>
-        </div>
-        <div className="chart-readout">
-          <strong>{lastClose ? formatMoney(lastClose) : "n/a"}</strong>
-          <span className={isUp ? "up" : "down"}>
-            {isUp ? "+" : ""}
-            {formatMoney(absoluteChange)} ({isUp ? "+" : ""}
-            {percentChange.toFixed(2)}%)
-          </span>
-        </div>
-      </div>
       <CardContent>
         <div className="interactive-chart-frame">
           <ChartContainer config={chartConfig} className="interactive-chart-container">
-            <ComposedChart
+            <LineChart
               data={formattedData}
               margin={{
                 top: 16,
-                right: 10,
-                left: 0,
-                bottom: 6
+                right: 12,
+                left: 4,
+                bottom: 8
               }}
             >
-              <CartesianGrid vertical={false} strokeDasharray="3 3" />
+              <CartesianGrid strokeDasharray="3 3" />
               <XAxis
                 dataKey="date"
                 tickLine={false}
                 axisLine={false}
                 tickMargin={8}
                 minTickGap={32}
-                tickFormatter={(value) => {
-                  const date = new Date(value);
-                  return date.toLocaleDateString("en-US", {
-                    month: "short",
-                    day: "numeric"
-                  });
-                }}
+                tickFormatter={(value) => formatAxisDate(value, selectedRange)}
               />
-              <YAxis
-                yAxisId="price"
-                domain={[Math.max(minValue - pricePadding, 0), maxValue + pricePadding]}
-                tickLine={false}
-                axisLine={false}
-                tickMargin={8}
-                width={58}
-                tickFormatter={(value) => `$${Number(value).toFixed(0)}`}
-              />
-              <YAxis yAxisId="volume" orientation="right" hide domain={[0, maxVolume * 4 || 1]} />
+              <YAxis domain={yDomain} tickFormatter={(value) => `$${value.toFixed(2)}`} />
               <ChartTooltip
                 content={
                   <ChartTooltipContent
                     className="chart-tooltip-width"
-                    formatter={(value, name) => (
-                      <>
-                        <div
-                          className="tooltip-indicator line"
-                          style={{
-                            "--color-bg": name === "volume" ? "var(--border)" : "var(--chart-1)",
-                            "--color-border": name === "volume" ? "var(--border)" : "var(--chart-1)"
-                          }}
-                        />
-                        <div className="tooltip-item-body items-center">
-                          <div className="tooltip-item-label">
-                            <span>{name === "volume" ? "Volume" : "Close"}</span>
-                          </div>
-                          <span className="tooltip-value">
-                            {name === "volume" ? formatCompact(value) : formatMoney(value)}
-                          </span>
-                        </div>
-                      </>
-                    )}
-                    labelFormatter={(value) => {
-                      return new Date(value).toLocaleDateString("en-US", {
-                        month: "short",
-                        day: "numeric"
-                      });
-                    }}
+                    labelFormatter={(value) => formatTooltipDate(value, selectedRange)}
                   />
                 }
               />
-              <Bar
-                yAxisId="volume"
-                dataKey="volume"
-                fill="var(--border)"
-                opacity={0.42}
-                radius={[2, 2, 0, 0]}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="price"
-                type="monotone"
-                dataKey="close"
-                stroke={chartConfig.close.color}
-                strokeWidth={2.4}
-                dot={false}
-                activeDot={{ r: 4, strokeWidth: 0 }}
-              />
-            </ComposedChart>
+              <Line type="monotone" dataKey="high" stroke={chartConfig.high.color} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="close" stroke={chartConfig.close.color} strokeWidth={2} dot={false} />
+              <Line type="monotone" dataKey="low" stroke={chartConfig.low.color} strokeWidth={2} dot={false} />
+            </LineChart>
           </ChartContainer>
         </div>
       </CardContent>

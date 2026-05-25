@@ -553,3 +553,59 @@ export async function buildStockIntel() {
     agent_context: buildAgentContext(kalshi, calendars, explorerDiscovery, stockSignals, recommendations, hermesDecision)
   };
 }
+
+export function compactStockIntel(intel: Awaited<ReturnType<typeof buildStockIntel>>) {
+  return {
+    ok: intel.ok,
+    timestamp: intel.timestamp,
+    pipeline: intel.pipeline,
+    robinhood_chain: {
+      stock_count: intel.robinhood_chain.stock_count,
+      payment_tokens: intel.robinhood_chain.payment_tokens,
+      stocks: intel.robinhood_chain.stocks,
+      source: intel.robinhood_chain.source
+    },
+    explorer_discovery: {
+      ok: intel.explorer_discovery.ok,
+      source: intel.explorer_discovery.source,
+      stock_like_count: intel.explorer_discovery.stock_like_count,
+      official_count: intel.explorer_discovery.official_count,
+      other_count: intel.explorer_discovery.other_count,
+      tokens: intel.explorer_discovery.tokens.map((token) => ({
+        symbol: token.symbol,
+        name: token.name,
+        address: token.address,
+        trust_level: token.trust_level,
+        routed_by_agent: token.routed_by_agent
+      })),
+      error: intel.explorer_discovery.error
+    },
+    stock_signals: {
+      ok: intel.stock_signals.ok,
+      source_note: intel.stock_signals.source_note,
+      cached: intel.stock_signals.cached,
+      prices: intel.stock_signals.prices,
+      filings: intel.stock_signals.filings,
+      news: intel.stock_signals.news.map((row) => ({
+        ...row,
+        top_articles: row.top_articles.slice(0, 2)
+      }))
+    },
+    kalshi: {
+      ok: intel.kalshi.ok,
+      source: intel.kalshi.source,
+      source_note: intel.kalshi.source_note,
+      scanned_markets: intel.kalshi.scanned_markets,
+      searched_terms: intel.kalshi.searched_terms,
+      error: intel.kalshi.error,
+      stocks: intel.kalshi.stocks.map((row) => ({
+        stock: row.stock,
+        match_count: row.match_count,
+        markets: row.markets.slice(0, 3)
+      }))
+    },
+    calendars: intel.calendars,
+    recommendations: intel.recommendations,
+    hermes_decision: intel.hermes_decision
+  };
+}

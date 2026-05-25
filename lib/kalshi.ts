@@ -449,6 +449,8 @@ export async function matchStockMarkets(stocks = robinhoodStockTokens) {
         expected_expiration_time: market.expected_expiration_time,
         liquidity_dollars: market.liquidity_dollars,
         volume_24h_fp: market.volume_24h_fp,
+        volume_fp: market.volume_fp,
+        rules_primary: market.rules_primary,
         status: market.status
       }))
     };
