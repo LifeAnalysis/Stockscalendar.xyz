@@ -862,10 +862,10 @@ select {
 }
 
 .stock-card .logo {
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
   border-radius: 0;
-  padding: 3px;
+  padding: 2px;
 }
 
 .stock-top {
@@ -874,7 +874,7 @@ select {
   grid-template-columns: auto minmax(0, 1fr);
   align-items: center;
   justify-items: stretch;
-  gap: 10px;
+  gap: 5px;
   text-align: left;
 }
 
@@ -2079,9 +2079,9 @@ select {
 }
 
 .kalshi-heading-motion {
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
   border-radius: 0;
   object-fit: cover;
 }
@@ -3384,12 +3384,12 @@ select {
 
   .stock-top {
     justify-items: stretch;
-    gap: 6px;
+    gap: 4px;
   }
 
   .stock-card .logo {
-    width: 22px;
-    height: 22px;
+    width: 26px;
+    height: 26px;
   }
 
   .stock-card .ticker {

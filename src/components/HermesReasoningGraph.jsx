@@ -30,8 +30,8 @@ function kalshiMarketUrl(market) {
 
 function nodeDimensions(node) {
   const label = String(node.label || "");
-  const width = Math.max(128, Math.min(190, label.length * 7 + 34));
-  const height = node.type === "decision" ? 66 : label.length > 22 ? 60 : 52;
+  const width = Math.max(118, Math.min(168, label.length * 6.5 + 30));
+  const height = node.type === "decision" ? 60 : label.length > 22 ? 56 : 48;
   return { width, height };
 }
 
@@ -126,16 +126,16 @@ function addEdge(edges, source, target, label, polarity = "neutral") {
 function positionGraphNodes(nodes) {
   const peripheralNodes = nodes.filter((node) => node.data.id !== "decision");
   const compactSlots = [
-    { x: 0, y: -135 },
-    { x: 250, y: -78 },
-    { x: 250, y: 78 },
-    { x: 0, y: 135 },
-    { x: -250, y: 78 },
-    { x: -250, y: -78 },
-    { x: 128, y: -135 },
-    { x: -128, y: 135 },
-    { x: 128, y: 135 },
-    { x: -128, y: -135 }
+    { x: 0, y: -104 },
+    { x: 168, y: -60 },
+    { x: 168, y: 60 },
+    { x: 0, y: 104 },
+    { x: -168, y: 60 },
+    { x: -168, y: -60 },
+    { x: 86, y: -104 },
+    { x: -86, y: 104 },
+    { x: 86, y: 104 },
+    { x: -86, y: -104 }
   ];
 
   return nodes.map((node) => {
@@ -151,8 +151,8 @@ function positionGraphNodes(nodes) {
     return {
       ...node,
       position: {
-        x: Math.cos(angle) * 250,
-        y: Math.sin(angle) * 135
+        x: Math.cos(angle) * 168,
+        y: Math.sin(angle) * 104
       }
     };
   });
@@ -327,7 +327,7 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
       autoungrabify: false,
       boxSelectionEnabled: false,
       maxZoom: 1.25,
-      minZoom: 0.1,
+      minZoom: 0.04,
       panningEnabled: false,
       userPanningEnabled: false,
       userZoomingEnabled: false,
@@ -351,7 +351,7 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
             "text-halign": "center",
             "text-margin-x": 0,
             "text-margin-y": 0,
-            "text-max-width": 170,
+            "text-max-width": 148,
             "text-valign": "center",
             "text-wrap": "wrap",
             width: "data(width)"
@@ -401,14 +401,14 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
         name: "preset",
         animate: false,
         fit: true,
-        padding: 88
+        padding: 104
       }
     });
 
     const centerGraph = () => {
       cy.resize();
       if (cy.elements().length) {
-        cy.fit(cy.elements(), 88);
+        cy.fit(cy.elements(), 104);
       }
     };
     const initialNode = cy.getElementById(graph.selected?.id || "decision");
@@ -444,7 +444,7 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
 
   const resetGraph = React.useCallback(() => {
     if (!cyRef.current) return;
-    cyRef.current.fit(cyRef.current.elements(), 88);
+    cyRef.current.fit(cyRef.current.elements(), 104);
   }, []);
 
   return (
