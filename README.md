@@ -1,35 +1,110 @@
 # Hermes Robinhood Chain
 
-Next.js command center for Robinhood Chain stock tokens, Kalshi market context, public event links, SEC/news signals, and Hermes research.
+Hermes Robinhood Chain is a Next.js research command center for Robinhood Chain testnet stock tokens. It combines official testnet token contracts with public market context, Kalshi prediction-market data, SEC filings, GDELT news, earnings calendars, historical chart data, and an OpenRouter-powered Hermes summary layer.
 
-The app does not sign transactions. Quote preparation is disabled until a provider with Robinhood Chain stock-token support is configured.
+The product is intentionally research-first. It does not claim to execute trades, and the quote endpoint is disabled until a provider with explicit Robinhood Chain stock-token support is configured.
 
-## Stack
+## What It Does
+
+- Shows the supported Robinhood Chain stock universe: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`.
+- Keeps the classic DEX-style buy/sell ticket visible while separating quote readiness from unsupported execution.
+- Loads Hermes intelligence progressively so the UI is usable before slower model output finishes.
+- Explains why Hermes does or does not support a stock route.
+- Breaks down confidence into the same evidence categories used by the backend scoring model.
+- Displays earnings context, recent earnings backtests, public news, SEC filing links, latest quote snapshots, and Kalshi YES/NO market pricing.
+- Shows data-source health and provenance for every major upstream feed.
+- Records a local post-trade/quote journal when quote events or transaction hashes exist.
+- Uses optimized motion-icon assets under `public/media/icons` with originals preserved under `assets/originals`.
+
+## Current Product Surface
+
+The main app is a two-column stock desk:
+
+- **Left side:** buy/sell ticket, supported stock strip, earnings calendar, and stock selection.
+- **Right side:** selected-stock research panel with chart ranges, Hermes output, confidence breakdown, reasoning graph, earnings backtest, prediction-market overlay, data provenance, and local journal.
+
+### Hermes Panels
+
+- **Hermes output:** model or deterministic fallback summary for the selected stock.
+- **Why this route?:** selected source/target token route, wallet/network/quote state, and key evidence chips.
+- **Confidence decomposition:** point-by-point confidence contribution from route readiness, Kalshi, earnings, quote data, SEC, news, and explorer checks.
+- **Reasoning graph:** visual evidence graph linking route, public sources, market context, and Hermes decision.
+- **Earnings backtest:** previous earnings events with post-event move, news count, Kalshi context, and concise analysis.
+- **Prediction-market overlay:** matched Kalshi markets, YES/NO bid/ask, liquidity, close time, and match quality.
+- **Data provenance:** source status table for Robinhood contracts, Kalshi, calendars, Stooq/Yahoo, SEC, GDELT, and explorer discovery.
+- **Post-trade journal:** local `localStorage` journal of quote-ready/rejected or transaction-confirmed events.
+
+## Execution Boundary
+
+Robinhood Chain stock-token quote preparation is currently disabled:
+
+- `/api/robinhood/trade` validates the expected request shape and then returns an explicit unsupported-provider response.
+- Nuvolari integration was removed because Nuvolari does not support Robinhood Chain stock tokens.
+- Wallet connection can still be used for UI readiness and future integration work.
+- A real quote provider must return wallet-signable transaction data before the signing flow should be enabled again.
+
+## Data Sources
+
+Hermes uses only machine-readable data sources that the backend can inspect directly:
+
+- **Robinhood Chain docs/contracts:** official token universe and payment tokens.
+- **Robinhood Chain explorer:** token discovery and contract confirmation context.
+- **Kalshi public Trade API:** open public market and series data, locally filtered against stock symbols and company names.
+- **Stooq:** public latest quote snapshots.
+- **Yahoo Chart:** historical OHLC chart ranges and earnings backtest price windows.
+- **Yahoo/public calendar links:** earnings date and estimate context where available.
+- **SEC EDGAR submissions:** recent material filings and filing document links.
+- **GDELT:** recent stock-related article counts and top titles.
+- **OpenRouter:** optional natural-language Hermes summaries and earnings-event analysis.
+
+Hermes does not use Kalshi website search pages as source data because those pages can be noisy, protected, or unrelated to stock-specific markets.
+
+## API Routes
 
 ```text
-app/page.tsx                       Frontend command center
-app/api/health/route.ts            Runtime readiness
-app/api/robinhood/status/route.ts  Robinhood Chain RPC status
-app/api/robinhood/stocks/route.ts  Stock token dictionary
-app/api/robinhood/intel/route.ts   Robinhood + Kalshi + calendar aggregate
-app/api/robinhood/trade/route.ts   Disabled quote endpoint until a supported provider exists
-app/api/chat/route.ts              Hermes chat fed by the same normalized intel payload
-lib/robinhood.ts                   Official stock/payment token dictionary and chain helpers
-lib/kalshi.ts                      Kalshi public market fetch + matcher
-lib/calendar.ts                    Public earnings/event lookup
-lib/stock-signals.ts               Stooq quotes, SEC filings, and GDELT news context
-lib/intel.ts                       Pipeline checks and compact agent context
+app/page.tsx                         Frontend command center
+app/api/health/route.ts              Runtime readiness and source configuration
+app/api/chat/route.ts                Hermes chat wrapper over the same stock intel
+app/api/hermes/output/route.ts       Hermes selected-stock intelligence payload
+app/api/hermes/backtest/route.ts     Previous-three-earnings backtest per stock
+app/api/robinhood/intel/route.ts     Aggregated source checks, recommendations, and agent context
+app/api/robinhood/stocks/route.ts    Supported stock/payment token dictionary
+app/api/robinhood/status/route.ts    Robinhood Chain RPC status
+app/api/robinhood/trade/route.ts     Disabled quote endpoint until a supported provider exists
+app/api/stocks/chart/route.ts        Yahoo Chart OHLC data for chart ranges
+```
+
+## Key Modules
+
+```text
+lib/robinhood.ts              Official stock/payment token dictionary, RPC status, disabled quote boundary
+lib/intel.ts                  Main data pipeline, pipeline checks, recommendations, Hermes decision model
+lib/kalshi.ts                 Kalshi market/series fetching and stock-market matching
+lib/calendar.ts               Earnings date and estimate fetching with public fallback links
+lib/stock-signals.ts          Stooq, Yahoo Chart, SEC EDGAR, and GDELT stock signals
+lib/hermes-output.ts          OpenRouter prompt boundary and deterministic fallback output
+lib/earnings-backtest.ts      Earnings backtest, optional Postgres cache, OpenRouter event analysis
+lib/postgres.ts               `DATABASE_URL` / `POSTGRES_URL` cache connection helper
+src/App.jsx                   Main UI and Hermes research panels
+src/components/*              Chart, reasoning graph, and UI primitives
 ```
 
 ## Environment
 
+Most values have defaults, but production should provide real API keys and contact details where relevant.
+
 ```bash
+# OpenRouter, optional but recommended for natural-language Hermes summaries.
 OPENROUTER_API_KEY=
 OPENROUTER_MODEL=deepseek/deepseek-v4-flash
+OPENROUTER_MAX_TOKENS=4096
 OPENROUTER_TIMEOUT_MS=45000
+
+# Optional persistent cache for earnings backtests.
 DATABASE_URL=
 EARNINGS_BACKTEST_CACHE_HOURS=24
 
+# Kalshi public market data.
 KALSHI_API_BASE_URL=https://external-api.kalshi.com/trade-api/v2
 KALSHI_MARKET_CACHE_SECONDS=180
 KALSHI_MAX_MARKET_PAGES=12
@@ -39,9 +114,10 @@ KALSHI_USE_SERIES_SCAN=true
 KALSHI_MAX_SEARCH_TERMS=32
 KALSHI_MAX_SERIES_PER_STOCK=4
 KALSHI_TARGETED_MARKET_PAGES=0
+
+# Source-level timeouts.
 CALENDAR_SOURCE_TIMEOUT_MS=8000
 EXPLORER_SOURCE_TIMEOUT_MS=6000
-
 STOCK_SIGNALS_TIMEOUT_MS=12000
 STOCK_SIGNALS_CACHE_SECONDS=300
 STOOQ_TIMEOUT_MS=6000
@@ -49,56 +125,93 @@ YAHOO_CHART_TIMEOUT_MS=6000
 YAHOO_CHART_RANGE=3mo
 YAHOO_CHART_INTERVAL=1d
 SEC_TIMEOUT_MS=8000
-SEC_USER_AGENT=hermes-agent-backend/2.0 contact@example.com
+SEC_USER_AGENT=hermes-agent-backend/2.0 your-email@example.com
 GDELT_TIMEOUT_MS=3000
 GDELT_MAX_RECORDS=25
 
+# Robinhood Chain server-side RPC.
 ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
 ROBINHOOD_CHAIN_ID=46630
 ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
 
+# Browser wallet config.
+NEXT_PUBLIC_SITE_URL=
 NEXT_PUBLIC_REOWN_PROJECT_ID=
 NEXT_PUBLIC_ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
 NEXT_PUBLIC_ROBINHOOD_CHAIN_ID=46630
 NEXT_PUBLIC_ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
 ```
 
-## Source Of Truth
+### Database URL
 
-Robinhood stock tokens are currently the official testnet contracts from `https://docs.robinhood.com/chain/contracts/`: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`, plus payment tokens `WETH` and `USDG`.
+`DATABASE_URL` is a Postgres connection string used only for the Hermes earnings backtest cache. If it is not set, the app falls back to in-memory caching for local development.
 
-Kalshi market data uses the public Trade API series and market feeds, then filters locally against Robinhood stock symbols and company keywords such as Tesla, Amazon, Palantir, Netflix, and Advanced Micro Devices. Hermes does not treat `kalshi.com/search` pages as machine-readable source data, because the website search can surface noisy or protected results that are not a clean execution signal.
+Valid providers include Railway Postgres, Vercel Postgres, Neon, and Supabase. The app also accepts `POSTGRES_URL` as a fallback in `lib/postgres.ts`.
 
-Stock context comes from free/no-secret feeds: Stooq public quote CSVs, Yahoo Chart historical OHLC data, SEC EDGAR submissions, and GDELT news search. Calendar data uses public finance endpoints where available and returns public links for manual inspection.
+## Media Assets
 
-## Data Pipeline
+Motion-icon originals live in:
 
-`/api/robinhood/intel` is the aggregate source for Hermes. It returns explicit pipeline checks for Robinhood Chain token contracts, stock signal feeds, Blockscout explorer discovery, Kalshi public markets, and public event calendars, plus per-stock Hermes recommendations and a compact `agent_context` object consumed by `/api/chat`.
+```text
+assets/originals/
+```
 
-`/api/chat` passes that context to OpenRouter when `OPENROUTER_API_KEY` is configured. Without OpenRouter, it still returns a deterministic pipeline-aware response and includes the raw intel payload for inspection.
+Optimized app assets live in:
 
-`/api/hermes/output` returns compact browser-safe data by default. Add `?debug=1` only when the full backend payload is needed for inspection.
+```text
+public/media/icons/
+```
 
-The frontend loads in stages: supported stock catalog first, compact stock intel second, and the slower Hermes/OpenRouter response last. While Hermes is running, the UI stays interactive and shows progress instead of blocking the stock desk.
+The optimized versions are generated at roughly 160px, 24fps, no audio, with WebM VP9 plus MP4 H.264 fallback. Regenerate them with:
 
-`/api/hermes/backtest?symbol=TSLA` builds the previous-three-earnings table for supported Robinhood Chain stock tokens. It uses curated 2020+ earnings dates, Yahoo Chart OHLC around each earnings date, date-bounded GDELT headlines, Kalshi public market matches when available, and OpenRouter for the concise event read. When `DATABASE_URL` or `POSTGRES_URL` is configured, results are cached in Postgres in `hermes_earnings_backtests`; otherwise the route falls back to in-memory cache for local development.
+```bash
+scripts/compress-motion-icons.sh
+```
 
-## Deployment
+Optional overrides:
 
-This repository is configured for Vercel as a Next.js app via `vercel.json`. The active backend is the set of Next API routes under `app/api/*`; external services are OpenRouter, Kalshi public Trade API, Yahoo Finance, Stooq, SEC EDGAR, GDELT, and the Robinhood Chain testnet RPC/explorer.
+```bash
+MAX_SIZE=96 FPS=18 MP4_CRF=22 WEBM_CRF=32 scripts/compress-motion-icons.sh
+```
 
-Use a production Reown project ID with the deployed domain allowlisted. If `NEXT_PUBLIC_REOWN_PROJECT_ID` is empty, wallet connect controls intentionally stay disabled.
+The full background video is intentionally left at `public/media/app-background.mp4`.
 
 ## Development
-
-`npm run dev` validates local runtime env, clears stale `.next` output, builds, and starts the app exactly like production. Use `.env.local` for real local values; Vercel encrypted or sensitive env vars can pull as empty strings, so do not assume `vercel env pull` produced a usable local file.
 
 ```bash
 npm install
 npm run env:check
-npm run lint
-npm run dev
-npm run build
+npm run dev:watch
 ```
 
-For hot reload, use `npm run dev:watch`. For UI-only work without external integrations, use `npm run dev:loose`.
+Useful commands:
+
+```bash
+npm run build      # production build
+npm run lint       # lint
+npm run check      # lint + build
+npm run dev        # production-like local boot: env check, build, start
+npm run dev:loose  # UI-only dev without env validation
+```
+
+`npm run dev` validates local runtime env, clears stale `.next` output, builds, and starts the app like production. Use `.env.local` for real local values.
+
+## Deployment
+
+The repository is configured as a Next.js app. Production needs:
+
+- domain-allowlisted Reown project ID
+- browser-safe Robinhood Chain RPC URL
+- server-side Robinhood Chain RPC URL
+- real SEC user-agent contact
+- optional OpenRouter key
+- optional Postgres `DATABASE_URL` for persistent backtest cache
+
+Quote execution should stay disabled until a supported Robinhood Chain stock-token quote provider is integrated and verified.
+
+## Notes
+
+- These Robinhood Chain stock tokens are testnet assets and have no real economic value.
+- Hermes recommendations are research/explainability outputs, not financial advice.
+- Kalshi data is used as supporting public prediction-market context, not as an execution venue.
+- The UI should surface degraded source warnings rather than hiding missing data.
