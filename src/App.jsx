@@ -206,67 +206,27 @@ function splitReasoningText(value) {
     .slice(0, 5);
 }
 
-function compactSentence(value, max = 150) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
-}
-
-function cleanEvidenceLabel(value) {
-  return String(value || "")
-    .replace(/\s*\(GDELT\)\s*/i, "")
-    .replace(/^Public quote$/i, "quote")
-    .replace(/^SEC filing$/i, "SEC")
-    .replace(/^Earnings calendar$/i, "calendar")
-    .replace(/^Kalshi market$/i, "Kalshi")
-    .toLowerCase();
-}
-
-function getSelectedRecommendation(stock, hermesOutput) {
-  return (hermesOutput?.data?.recommendations || []).find((item) => item.symbol === stock?.symbol);
-}
-
-function buildVisibleVoteRows({ stock, decision, recommendation, loading }) {
-  if (loading) return [];
-  const action = decision?.action || recommendation?.action || "WATCH";
-  const confidence = decision?.confidence ?? recommendation?.confidence ?? stock?.score ?? 0;
-  const breakdown = decision?.score_breakdown || recommendation?.score_breakdown || [];
-  const present = breakdown
-    .filter((item) => Number(item.points) > 0)
-    .map((item) => cleanEvidenceLabel(item.label))
-    .filter(Boolean);
-  const missing = breakdown
-    .filter((item) => Number(item.points) <= 0 && Number(item.max) > 0)
-    .map((item) => cleanEvidenceLabel(item.label))
-    .filter(Boolean);
-  const presentText = present.length ? `${present.slice(0, 2).join(" and ")} present` : "No strong support yet";
-  const missingText = missing.length ? `${missing.slice(0, 3).join(", ")} missing` : "no major source gap";
-  const call =
-    action === "BUY"
-      ? "Quote prep can be shown after wallet confirmation."
-      : action === "WATCH"
-        ? "Keep on watch. No signature."
-        : action === "CONFIG_NEEDED"
-          ? "Fix sources before showing a trade call."
-          : "Do not show quote prep yet.";
-
-  return [
-    {
-      label: "Take",
-      value: `${action} at ${confidence}/100. ${presentText}; ${missingText}.`
-    },
-    {
-      label: "Call",
-      value: call
-    }
-  ];
-}
-
 function cleanHermesText(value) {
   return String(value || "")
     .replace(/\*\*/g, "")
     .replace(/^\s*[-|]\s*/, "")
     .trim();
+}
+
+function parseHermesReplySections(reply) {
+  const text = String(reply || "").trim();
+  if (!text) return [];
+  const matches = [...text.matchAll(/\*\*(Checked|Final vote|Why|Next)\*\*|(?:^|\n|\s)(Checked|Final vote|Why|Next)\s*:/gi)];
+  if (!matches.length) return [{ title: "Output", body: text }];
+  return matches.map((match, index) => {
+    const title = match[1] || match[2];
+    const start = (match.index || 0) + match[0].length;
+    const end = matches[index + 1]?.index ?? text.length;
+    return {
+      title,
+      body: text.slice(start, end).trim()
+    };
+  });
 }
 
 function shortenAddress(value) {
@@ -477,7 +437,6 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
   const score = Math.max(0, Math.min(stock.score || 0, 100));
   const decision = hermesOutput?.hermes_decision?.stocks?.find((item) => item.symbol === stock.symbol);
   const llmStockVote = hermesOutput?.llm_vote?.stocks?.find((item) => item.symbol === stock.symbol);
-  const recommendation = getSelectedRecommendation(stock, hermesOutput);
   const [loadingWordIndex, setLoadingWordIndex] = React.useState(0);
 
   React.useEffect(() => {
@@ -509,16 +468,13 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
     })
     .filter((row) => KEEP_EVIDENCE_LABELS.has(row.label.trim().toLowerCase()));
   const stockReplyReason = stockEvidenceRows.map((row) => `${row.label}: ${row.value}`).join("\n");
-  const visibleVoteRows = buildVisibleVoteRows({ stock, decision, recommendation, loading });
   const reasoning =
-    (visibleVoteRows.length ? visibleVoteRows.map((row) => `${row.label}: ${row.value}`).join("\n") : "") ||
     stockReplyReason ||
     llmStockVote?.reason ||
     decision?.reason ||
     (loading ? "Hermes is collecting market, filing, quote, and route evidence before returning a decision." : `${stock.symbol} selected. Contract is ready for Robinhood testnet quote prep.`);
   const reasoningPoints = splitReasoningText(reasoning);
   const nextStep = llmStockVote?.user_action || decision?.user_action;
-  const showNextStep = !visibleVoteRows.length && !loading && nextStep;
 
   return (
     <div className="cn-card score-card">
@@ -593,8 +549,8 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
               <span>{loading ? "Hermes model running" : `${stock.symbol} final vote`}</span>
             </div>
             <div className="reasoning-point-list">
-              {visibleVoteRows.length || stockEvidenceRows.length
-                ? (visibleVoteRows.length ? visibleVoteRows : stockEvidenceRows).map((row) => (
+              {stockEvidenceRows.length
+                ? stockEvidenceRows.map((row) => (
                     <div className={`stock-evidence-row ${row.label.toLowerCase() === "take" ? "stock-evidence-take" : ""}`} key={`${row.label}-${row.value}`}>
                       <span>{row.label}</span>
                       <p>{row.value}</p>
@@ -604,10 +560,10 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
                   ? reasoningPoints.map((point) => <p key={point}>{point}</p>)
                   : <p>{reasoning}</p>}
             </div>
-            {showNextStep ? (
+            {!loading && nextStep ? (
               <div className="stock-next-step">
                 <span>Next</span>
-                <p>{compactSentence(nextStep)}</p>
+                <p>{nextStep}</p>
               </div>
             ) : null}
           </div>
@@ -631,10 +587,11 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
 }
 
 function HermesFinalOutput({ hermesOutput, loading }) {
+  const reply = hermesOutput?.reply_source === "openrouter" ? hermesOutput?.reply : "";
   const niceReply = cleanHermesText(hermesOutput?.nice_reply || hermesOutput?.text_output || "");
-  const summary = compactSentence(niceReply || hermesOutput?.hermes_decision?.summary || "", 240);
+  const sections = parseHermesReplySections(reply);
   const votes = hermesOutput?.llm_vote?.stocks || hermesOutput?.hermes_decision?.stocks || [];
-  if (loading || (!summary && !votes.length)) return null;
+  if (loading || (!niceReply && (!reply || !sections.length))) return null;
 
   return (
     <section className="cn-card hermes-final-output" aria-label="Hermes final output">
@@ -642,23 +599,44 @@ function HermesFinalOutput({ hermesOutput, loading }) {
         <div className="hermes-final-header">
           <div>
             <span>Hermes output</span>
-            <h3>Market summary</h3>
+            <h3>Final vote</h3>
           </div>
         </div>
-        {summary ? (
+        {niceReply ? (
           <div className="hermes-nice-output">
-            <p>{summary}</p>
+            <p>{niceReply}</p>
           </div>
         ) : null}
-        {votes.length ? (
-          <div className="hermes-vote-grid" aria-label="Stock votes">
-            {votes.map((vote) => (
-              <div key={vote.symbol} className="hermes-vote-row">
-                <strong>{vote.symbol}</strong>
-                <span>{vote.action}</span>
-                <small>{vote.confidence}/100</small>
-              </div>
-            ))}
+        {sections.length ? (
+          <div className="hermes-final-sections">
+            {sections.map((section) => {
+              const title = cleanHermesText(section.title);
+              const lines = section.body
+                .split("\n")
+                .map(cleanHermesText)
+                .filter((line) => line && !/^\|[-\s|]+\|?$/.test(line) && !/^stock\s*\|/i.test(line));
+              const showVotes = title.toLowerCase() === "final vote" && votes.length;
+              return (
+                <article key={title} className="hermes-final-section">
+                  <h4>{title}</h4>
+                  {showVotes ? (
+                    <div className="hermes-vote-grid">
+                      {votes.map((vote) => (
+                        <div key={vote.symbol} className="hermes-vote-row">
+                          <strong>{vote.symbol}</strong>
+                          <span>{vote.action}</span>
+                          <small>{vote.confidence}/100</small>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="hermes-final-copy">
+                      {lines.map((line) => <p key={line}>{line}</p>)}
+                    </div>
+                  )}
+                </article>
+              );
+            })}
           </div>
         ) : null}
       </div>
