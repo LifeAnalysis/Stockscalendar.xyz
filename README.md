@@ -2,7 +2,7 @@
 
 Hermes Robinhood Chain is a Next.js research command center for Robinhood Chain testnet stock tokens. It combines official testnet token contracts with public market context, Kalshi prediction-market data, SEC filings, GDELT news, earnings calendars, historical chart data, and an OpenRouter-powered Hermes summary layer.
 
-The product is intentionally research-first. It can prepare unsigned RH Swap transaction requests for wallet execution when a Robinhood Chain stock-token pair exists, but it never signs or submits trades server-side.
+The product is intentionally research-first. It can prepare unsigned Hobin DEX transaction requests for wallet execution against Robinhood Chain testnet stock-token pools, but it never signs or submits trades server-side.
 
 ## What It Does
 
@@ -36,12 +36,13 @@ The main app is a two-column stock desk:
 
 ## Execution Boundary
 
-Robinhood Chain stock-token quote preparation uses RH Swap testnet contracts:
+Robinhood Chain stock-token quote preparation uses Hobin testnet contracts, with RH Swap kept as a fallback discovery surface:
 
 - `/api/robinhood/trade` validates exact token addresses and prepares wallet-signable transaction data only.
-- The integrated DEX is RH Swap's testnet `MockSwapFactory` at `0xE9a696F428725134AB06454A0CB2E7434e3deC4c`.
-- RH Swap is a direct native-ETH pair DEX. There is no app-side router and the server does not sign transactions.
-- If an official stock token has no RH Swap pair or no liquidity, the endpoint returns an explicit `no_pair` or `no_liquidity` response.
+- The primary integrated DEX is Hobin: factory `0xdD427A5AdF55C1ad4e82E6Af8C0Baaab0A2b5515`, router `0xF957Cb7a67180bf70Ca46C7c88F6c2b3Cb9c33B4`.
+- Hobin has WETH pairs for the supported official stock tokens: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`.
+- RH Swap's testnet `MockSwapFactory` at `0xE9a696F428725134AB06454A0CB2E7434e3deC4c` is still recognized, but its official stock-token pairs were not liquid at integration time.
+- If a stock token has no pair or no liquidity, the endpoint returns an explicit `no_pair` or `no_liquidity` response.
 - Nuvolari integration is not used because Nuvolari does not support Robinhood Chain stock tokens.
 
 ## Data Sources
@@ -71,14 +72,14 @@ app/api/hermes/backtest/route.ts     Previous-three-earnings backtest per stock
 app/api/robinhood/intel/route.ts     Aggregated source checks, recommendations, and agent context
 app/api/robinhood/stocks/route.ts    Supported stock/payment token dictionary
 app/api/robinhood/status/route.ts    Robinhood Chain RPC status
-app/api/robinhood/trade/route.ts     RH Swap quote preparation and no-pair/no-liquidity reporting
+app/api/robinhood/trade/route.ts     Hobin quote preparation and no-pair/no-liquidity reporting
 app/api/stocks/chart/route.ts        Yahoo Chart OHLC data for chart ranges
 ```
 
 ## Key Modules
 
 ```text
-lib/robinhood.ts              Official stock/payment token dictionary, RPC status, RH Swap quote boundary
+lib/robinhood.ts              Official stock/payment token dictionary, RPC status, DEX quote boundary
 lib/intel.ts                  Main data pipeline, pipeline checks, recommendations, Hermes decision model
 lib/kalshi.ts                 Kalshi market/series fetching and stock-market matching
 lib/calendar.ts               Earnings date and estimate fetching with public fallback links
@@ -132,10 +133,13 @@ GDELT_MAX_RECORDS=25
 YAHOO_NEWS_TIMEOUT_MS=6000
 YAHOO_NEWS_COUNT=6
 
-# Robinhood Chain server-side RPC and RH Swap testnet factory.
+# Robinhood Chain server-side RPC and DEX contracts.
 ROBINHOOD_CHAIN_RPC_URL=https://rpc.testnet.chain.robinhood.com
 ROBINHOOD_CHAIN_ID=46630
 ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
+HOBIN_FACTORY_ADDRESS=0xdD427A5AdF55C1ad4e82E6Af8C0Baaab0A2b5515
+HOBIN_ROUTER_ADDRESS=0xF957Cb7a67180bf70Ca46C7c88F6c2b3Cb9c33B4
+HOBIN_SWAP_DEADLINE_SECONDS=1200
 ROBINHOOD_SWAP_FACTORY_ADDRESS=0xE9a696F428725134AB06454A0CB2E7434e3deC4c
 ROBINHOOD_SWAP_TIMEOUT_MS=12000
 
@@ -212,7 +216,7 @@ The repository is configured as a Next.js app. Production needs:
 - optional OpenRouter key
 - optional Postgres `DATABASE_URL` for persistent backtest cache
 
-Quote execution must stay wallet-owned. The backend may prepare calldata for verified RH Swap pairs, but signing and broadcasting must remain in the connected wallet.
+Quote execution must stay wallet-owned. The backend may prepare calldata for verified Hobin/RH Swap pairs, but signing and broadcasting must remain in the connected wallet.
 
 ## Notes
 

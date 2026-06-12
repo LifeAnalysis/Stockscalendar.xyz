@@ -1898,7 +1898,7 @@ function App() {
       return;
     }
     if (!backend.trade) {
-      setTradeError("RH Swap quote preparation is unavailable. Check Robinhood Chain RPC and factory configuration.");
+      setTradeError("DEX quote preparation is unavailable. Check Robinhood Chain RPC and DEX configuration.");
       return;
     }
 
