@@ -741,6 +741,151 @@ select {
   font-weight: 900;
 }
 
+.agent-panel {
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.7);
+  color: #1f1f1f;
+  box-shadow: none;
+}
+
+.agent-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.agent-header h2 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.05;
+}
+
+.agent-live-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: #ccff00;
+  box-shadow: 0 0 0 3px rgba(204, 255, 0, 0.22);
+}
+
+.agent-live-dot.thinking {
+  background: #111111;
+  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12);
+}
+
+.agent-context-row,
+.agent-prompts,
+.agent-actions,
+.agent-warnings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.agent-context-row {
+  margin-bottom: 10px;
+}
+
+.agent-context-row span,
+.agent-warnings span {
+  min-height: 24px;
+  border: 1px solid #d8d8d8;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #777777;
+  padding: 4px 8px;
+  font-size: 11px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.agent-thread {
+  display: grid;
+  gap: 8px;
+  max-height: 280px;
+  overflow-y: auto;
+  padding-right: 2px;
+}
+
+.agent-message {
+  display: grid;
+  gap: 8px;
+  border: 1px solid #d8d8d8;
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.72);
+  padding: 10px;
+}
+
+.agent-message.user {
+  background: #f7f8f2;
+}
+
+.agent-message-body {
+  color: #1f1f1f;
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.agent-warnings span {
+  border-color: #f1dfac;
+  background: #fff9e8;
+  color: #7b6118;
+}
+
+.agent-actions button,
+.agent-prompts button,
+.agent-input-row button {
+  min-height: 30px;
+  border: 1px solid #d8d8d8;
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: #1f1f1f;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 900;
+}
+
+.agent-actions button:first-child {
+  border-color: #b4e600;
+  background: #ccff00;
+}
+
+.agent-prompts {
+  margin-top: 10px;
+}
+
+.agent-prompts button {
+  color: #555555;
+}
+
+.agent-input-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.agent-input-row input {
+  min-width: 0;
+  min-height: 38px;
+  border: 1px solid #d8d8d8;
+  border-radius: var(--radius);
+  background: #ffffff;
+  color: #1f1f1f;
+  padding: 0 10px;
+  font-size: 13px;
+}
+
+.agent-input-row button:disabled,
+.agent-prompts button:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .token-picker-panel {
   width: 100%;
   max-height: 210px;

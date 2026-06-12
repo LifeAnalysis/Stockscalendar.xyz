@@ -20,6 +20,7 @@ const InteractiveStockChart = React.lazy(() =>
 );
 
 const JOURNAL_STORAGE_KEY = "hermes-post-trade-journal";
+const AGENT_STORAGE_KEY = "hermes-agent-chat";
 const HERMES_PROGRESS = {
   boot: { percent: 8, label: "Loading stock desk", detail: "Preparing the Robinhood token catalog." },
   sources: { percent: 28, label: "Checking market context", detail: "Reading supported stocks and route readiness." },
@@ -35,6 +36,7 @@ const CHART_RANGES = [
   { label: "1M", range: "1mo", interval: "1d" },
   { label: "1Y", range: "1y", interval: "1wk" }
 ];
+const AGENT_QUICK_PROMPTS = ["Explain route", "Check Hobin liquidity", "Quant analysis", "Scan news"];
 
 const stockPresentation = [
   {
@@ -1504,6 +1506,74 @@ function EarningsCalendar({ events, stocks, monthDate, onMonthChange, onSelectSt
   );
 }
 
+function HermesAgentPanel({ messages, input, busy, context, onInputChange, onSend, onQuickPrompt, onAction }) {
+  const chips = [
+    context.stock ? context.stock.symbol : "No stock",
+    context.connected ? "Wallet connected" : "No wallet",
+    context.connectedToRobinhood ? "Robinhood Chain" : "Wrong network",
+    context.quoteReady ? "Quote ready" : "No quote"
+  ];
+
+  return (
+    <section className="panel agent-panel" aria-label="Hermes Agent chat">
+      <div className="agent-header">
+        <div>
+          <div className="module-kicker">Hermes Agent</div>
+          <h2>Route copilot</h2>
+        </div>
+        <span className={`agent-live-dot ${busy ? "thinking" : ""}`} aria-hidden="true" />
+      </div>
+      <div className="agent-context-row" aria-label="Agent context">
+        {chips.map((chip) => (
+          <span key={chip}>{chip}</span>
+        ))}
+      </div>
+      <div className="agent-thread" aria-live="polite">
+        {messages.map((message) => (
+          <article className={`agent-message ${message.role === "user" ? "user" : "assistant"}`} key={message.id}>
+            <div className="agent-message-body">{message.content}</div>
+            {message.warnings?.length ? (
+              <div className="agent-warnings">
+                {message.warnings.map((warning) => (
+                  <span key={warning}>{warning}</span>
+                ))}
+              </div>
+            ) : null}
+            {message.actions?.length ? (
+              <div className="agent-actions">
+                {message.actions.map((action, index) => (
+                  <button key={`${action.type}-${index}`} type="button" onClick={() => onAction(action)}>
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+      <div className="agent-prompts">
+        {AGENT_QUICK_PROMPTS.map((prompt) => (
+          <button key={prompt} type="button" onClick={() => onQuickPrompt(prompt)} disabled={busy}>
+            {prompt}
+          </button>
+        ))}
+      </div>
+      <form className="agent-input-row" onSubmit={onSend}>
+        <input
+          aria-label="Message Hermes Agent"
+          value={input}
+          placeholder="Ask about route, liquidity, or quote prep"
+          onChange={(event) => onInputChange(event.target.value)}
+          disabled={busy}
+        />
+        <button type="submit" disabled={busy || !input.trim()}>
+          {busy ? "..." : "Send"}
+        </button>
+      </form>
+    </section>
+  );
+}
+
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount({ namespace: "eip155" });
@@ -1517,7 +1587,7 @@ function App() {
   const [side, setSide] = React.useState("buy");
   const [stocks, setStocks] = React.useState([]);
   const [payTokens, setPayTokens] = React.useState([]);
-  const [payTokenSymbol, setPayTokenSymbol] = React.useState("USDG");
+  const [payTokenSymbol, setPayTokenSymbol] = React.useState("WETH");
   const [amount, setAmount] = React.useState("");
   const [tokenPicker, setTokenPicker] = React.useState(null);
   const [backend, setBackend] = React.useState({ health: false, intel: false, trade: false });
@@ -1541,6 +1611,15 @@ function App() {
   const [isExecutingQuote, setIsExecutingQuote] = React.useState(false);
   const [journalEntries, setJournalEntries] = React.useState([]);
   const [overlayBySymbol, setOverlayBySymbol] = React.useState({});
+  const [agentMessages, setAgentMessages] = React.useState(() => [
+    {
+      id: "agent-boot",
+      role: "assistant",
+      content: "I can explain the selected route, compare the desk, check Hobin liquidity, or prepare wallet-signable quote calldata."
+    }
+  ]);
+  const [agentInput, setAgentInput] = React.useState("");
+  const [agentBusy, setAgentBusy] = React.useState(false);
 
   const stock = stocks.find((item) => item.symbol === selected);
   const hermesOverlayOn = overlayBySymbol[stock?.symbol] ?? true;
@@ -1796,6 +1875,26 @@ function App() {
     }
   }, [journalEntries]);
 
+  React.useEffect(() => {
+    try {
+      const stored = window.localStorage.getItem(AGENT_STORAGE_KEY);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length) setAgentMessages(parsed.slice(-20));
+      }
+    } catch (error) {
+      console.warn("Unable to load Hermes Agent chat", error);
+    }
+  }, []);
+
+  React.useEffect(() => {
+    try {
+      window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agentMessages.slice(-20)));
+    } catch (error) {
+      console.warn("Unable to save Hermes Agent chat", error);
+    }
+  }, [agentMessages]);
+
   function routePayload() {
     if (!stock || !payToken) return null;
     const isSell = side === "sell";
@@ -1807,6 +1906,22 @@ function App() {
       wallet_address: wallet,
       provider: "auto",
       strategy: `Hermes Robinhood Chain ${side} route for ${stock.symbol}`
+    };
+  }
+
+  function agentContextPayload() {
+    return {
+      selectedSymbol: stock?.symbol,
+      side,
+      amount: amount.trim(),
+      walletAddress: wallet,
+      connected: isConnected,
+      connectedToRobinhood,
+      sourceAsset: sourceToken?.address,
+      targetAsset: targetToken?.address,
+      payTokenSymbol: payToken?.symbol,
+      quoteReady: quoteTransactions.length > 0,
+      backendTradeReady: backend.trade
     };
   }
 
@@ -1883,6 +1998,143 @@ function App() {
     }
   }
 
+  async function prepareQuoteFromPayload(payload) {
+    setIsPreparingQuote(true);
+    setTradeError("");
+    setTradeStatus("Preparing quote...");
+    try {
+      const res = await fetch("/api/robinhood/trade", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+      });
+      const prepared = await readJsonResponse(res);
+      if (!res.ok || !prepared) {
+        setTradeError(`Quote request failed with status ${res.status}.`);
+        return null;
+      }
+      if (prepared.ok === false) {
+        setQuote(prepared);
+        setQuoteTransactions([]);
+        setTradeError(prepared.message || prepared.error || "Quote request was rejected.");
+        appendJournalEntry("quote_rejected", { quote: prepared });
+        return prepared;
+      }
+      const transactions = extractTransactionRequests(prepared);
+      setQuote(prepared);
+      setQuoteTransactions(transactions);
+      setTradeStatus(
+        transactions.length
+          ? `Quote ready. ${transactions.length === 1 ? "Sign the swap transaction" : `Sign ${transactions.length} wallet transactions`}.`
+          : "Quote prepared, but the response did not include an executable wallet transaction."
+      );
+      appendJournalEntry(transactions.length ? "quote_ready" : "quote_prepared", { quote: prepared });
+      return prepared;
+    } catch (error) {
+      setTradeError(`Quote request failed: ${error.message}`);
+      return null;
+    } finally {
+      setIsPreparingQuote(false);
+    }
+  }
+
+  async function sendAgentMessage(text) {
+    const clean = String(text || "").trim();
+    if (!clean || agentBusy) return;
+    const userMessage = { id: `${Date.now()}-user`, role: "user", content: clean };
+    const history = [...agentMessages, userMessage].slice(-8);
+    setAgentMessages((current) => [...current, userMessage].slice(-20));
+    setAgentInput("");
+    setAgentBusy(true);
+    try {
+      const res = await fetch("/api/hermes/agent", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: clean,
+          context: agentContextPayload(),
+          history
+        })
+      });
+      const payload = await readJsonResponse(res);
+      setAgentMessages((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-assistant`,
+          role: "assistant",
+          content: payload?.reply || `Hermes Agent request failed with status ${res.status}.`,
+          actions: payload?.actions || [],
+          warnings: payload?.warnings || [],
+          intent: payload?.intent,
+          replySource: payload?.reply_source
+        }
+      ].slice(-20));
+    } catch (error) {
+      setAgentMessages((current) => [
+        ...current,
+        {
+          id: `${Date.now()}-assistant-error`,
+          role: "assistant",
+          content: `Hermes Agent request failed: ${error.message}`,
+          warnings: ["No transaction was prepared or sent."]
+        }
+      ].slice(-20));
+    } finally {
+      setAgentBusy(false);
+    }
+  }
+
+  async function handleAgentSubmit(event) {
+    event.preventDefault();
+    await sendAgentMessage(agentInput);
+  }
+
+  async function handleAgentAction(action) {
+    if (!action) return;
+    if (action.type === "connect_wallet") {
+      await connectWallet();
+      return;
+    }
+    if (action.type === "switch_network") {
+      await switchToRobinhood();
+      return;
+    }
+    if (action.type === "select_stock" && action.payload?.symbol) {
+      setSelected(String(action.payload.symbol).toUpperCase());
+      setDetailsOpen(true);
+      return;
+    }
+    if (action.type === "set_amount" && action.payload?.amount) {
+      setAmount(String(action.payload.amount));
+      if (action.payload.side === "buy" || action.payload.side === "sell") setSide(action.payload.side);
+      return;
+    }
+    if (action.type === "use_prepared_quote" && action.payload?.quote) {
+      const prepared = action.payload.quote;
+      const transactions = extractTransactionRequests(prepared);
+      setQuote(prepared);
+      setQuoteTransactions(transactions);
+      setTradeStatus(transactions.length ? "Quote loaded. Review and sign from wallet." : "Quote loaded without executable wallet transaction.");
+      appendJournalEntry(transactions.length ? "quote_ready" : "quote_prepared", { quote: prepared });
+      return;
+    }
+    if (action.type === "prepare_quote") {
+      const payload = routePayload();
+      if (!payload) {
+        setTradeError("Select a stock before preparing a quote.");
+        return;
+      }
+      if (!payload.wallet_address || !payload.amount) {
+        setTradeError("Connect wallet and enter an amount to prepare a quote.");
+        return;
+      }
+      await prepareQuoteFromPayload(payload);
+      return;
+    }
+    const prompt = action.payload?.prompt || `${action.label}${stock?.symbol ? ` for ${stock.symbol}` : ""}`;
+    await sendAgentMessage(prompt);
+  }
+
   async function submitTrade(event) {
     event.preventDefault();
     if (!isConnected) {
@@ -1911,41 +2163,7 @@ function App() {
       setTradeError("Connect wallet and enter an amount to prepare a quote.");
       return;
     }
-    setIsPreparingQuote(true);
-    setTradeError("");
-    setTradeStatus("Preparing quote...");
-    try {
-      const res = await fetch("/api/robinhood/trade", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-      });
-      const payload = await readJsonResponse(res);
-      if (!res.ok || !payload) {
-        setTradeError(`Quote request failed with status ${res.status}.`);
-        return;
-      }
-      if (payload.ok === false) {
-        setQuote(payload);
-        setQuoteTransactions([]);
-        setTradeError(payload.message || payload.error || "Quote request was rejected.");
-        appendJournalEntry("quote_rejected", { quote: payload });
-        return;
-      }
-      const transactions = extractTransactionRequests(payload);
-      setQuote(payload);
-      setQuoteTransactions(transactions);
-      setTradeStatus(
-        transactions.length
-          ? `Quote ready. ${transactions.length === 1 ? "Sign the swap transaction" : `Sign ${transactions.length} wallet transactions`}.`
-          : "Quote prepared, but the response did not include an executable wallet transaction."
-      );
-      appendJournalEntry(transactions.length ? "quote_ready" : "quote_prepared", { quote: payload });
-    } catch (error) {
-      setTradeError(`Quote request failed: ${error.message}`);
-    } finally {
-      setIsPreparingQuote(false);
-    }
+    await prepareQuoteFromPayload(payload);
   }
 
   function submitLabel() {
@@ -2133,6 +2351,17 @@ function App() {
               <p className="powered-by-chain">Powered by <span>Robinhood Chain</span></p>
             </div>
           </form>
+
+          <HermesAgentPanel
+            messages={agentMessages}
+            input={agentInput}
+            busy={agentBusy}
+            context={{ stock, connected: isConnected, connectedToRobinhood, quoteReady: quoteTransactions.length > 0 }}
+            onInputChange={setAgentInput}
+            onSend={handleAgentSubmit}
+            onQuickPrompt={sendAgentMessage}
+            onAction={handleAgentAction}
+          />
 
           <section className="panel stock-section">
             <div className="stocks-grid">
