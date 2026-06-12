@@ -2,12 +2,12 @@
 
 Hermes Robinhood Chain is a Next.js research command center for Robinhood Chain testnet stock tokens. It combines official testnet token contracts with public market context, Kalshi prediction-market data, SEC filings, GDELT news, earnings calendars, historical chart data, and an OpenRouter-powered Hermes summary layer.
 
-The product is intentionally research-first. It does not claim to execute trades, and the quote endpoint is disabled until a provider with explicit Robinhood Chain stock-token support is configured.
+The product is intentionally research-first. It can prepare unsigned RH Swap transaction requests for wallet execution when a Robinhood Chain stock-token pair exists, but it never signs or submits trades server-side.
 
 ## What It Does
 
 - Shows the supported Robinhood Chain stock universe: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`.
-- Keeps the classic DEX-style buy/sell ticket visible while separating quote readiness from unsupported execution.
+- Keeps the classic DEX-style buy/sell ticket visible while separating quote readiness, pair availability, and wallet execution.
 - Loads Hermes intelligence progressively so the UI is usable before slower model output finishes.
 - Explains why Hermes does or does not support a stock route.
 - Breaks down confidence into the same evidence categories used by the backend scoring model.
@@ -36,12 +36,13 @@ The main app is a two-column stock desk:
 
 ## Execution Boundary
 
-Robinhood Chain stock-token quote preparation is currently disabled:
+Robinhood Chain stock-token quote preparation uses RH Swap testnet contracts:
 
-- `/api/robinhood/trade` validates the expected request shape and then returns an explicit unsupported-provider response.
-- Nuvolari integration was removed because Nuvolari does not support Robinhood Chain stock tokens.
-- Wallet connection can still be used for UI readiness and future integration work.
-- A real quote provider must return wallet-signable transaction data before the signing flow should be enabled again.
+- `/api/robinhood/trade` validates exact token addresses and prepares wallet-signable transaction data only.
+- The integrated DEX is RH Swap's testnet `MockSwapFactory` at `0xE9a696F428725134AB06454A0CB2E7434e3deC4c`.
+- RH Swap is a direct native-ETH pair DEX. There is no app-side router and the server does not sign transactions.
+- If an official stock token has no RH Swap pair or no liquidity, the endpoint returns an explicit `no_pair` or `no_liquidity` response.
+- Nuvolari integration is not used because Nuvolari does not support Robinhood Chain stock tokens.
 
 ## Data Sources
 
@@ -70,14 +71,14 @@ app/api/hermes/backtest/route.ts     Previous-three-earnings backtest per stock
 app/api/robinhood/intel/route.ts     Aggregated source checks, recommendations, and agent context
 app/api/robinhood/stocks/route.ts    Supported stock/payment token dictionary
 app/api/robinhood/status/route.ts    Robinhood Chain RPC status
-app/api/robinhood/trade/route.ts     Disabled quote endpoint until a supported provider exists
+app/api/robinhood/trade/route.ts     RH Swap quote preparation and no-pair/no-liquidity reporting
 app/api/stocks/chart/route.ts        Yahoo Chart OHLC data for chart ranges
 ```
 
 ## Key Modules
 
 ```text
-lib/robinhood.ts              Official stock/payment token dictionary, RPC status, disabled quote boundary
+lib/robinhood.ts              Official stock/payment token dictionary, RPC status, RH Swap quote boundary
 lib/intel.ts                  Main data pipeline, pipeline checks, recommendations, Hermes decision model
 lib/kalshi.ts                 Kalshi market/series fetching and stock-market matching
 lib/calendar.ts               Earnings date and estimate fetching with public fallback links
@@ -131,15 +132,17 @@ GDELT_MAX_RECORDS=25
 YAHOO_NEWS_TIMEOUT_MS=6000
 YAHOO_NEWS_COUNT=6
 
-# Robinhood Chain server-side RPC.
-ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
+# Robinhood Chain server-side RPC and RH Swap testnet factory.
+ROBINHOOD_CHAIN_RPC_URL=https://rpc.testnet.chain.robinhood.com
 ROBINHOOD_CHAIN_ID=46630
 ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
+ROBINHOOD_SWAP_FACTORY_ADDRESS=0xE9a696F428725134AB06454A0CB2E7434e3deC4c
+ROBINHOOD_SWAP_TIMEOUT_MS=12000
 
 # Browser wallet config.
 NEXT_PUBLIC_SITE_URL=
 NEXT_PUBLIC_REOWN_PROJECT_ID=
-NEXT_PUBLIC_ROBINHOOD_CHAIN_RPC_URL=https://robinhood-testnet.g.alchemy.com/v2/...
+NEXT_PUBLIC_ROBINHOOD_CHAIN_RPC_URL=https://rpc.testnet.chain.robinhood.com
 NEXT_PUBLIC_ROBINHOOD_CHAIN_ID=46630
 NEXT_PUBLIC_ROBINHOOD_CHAIN_EXPLORER_URL=https://explorer.testnet.chain.robinhood.com/
 ```
@@ -209,7 +212,7 @@ The repository is configured as a Next.js app. Production needs:
 - optional OpenRouter key
 - optional Postgres `DATABASE_URL` for persistent backtest cache
 
-Quote execution should stay disabled until a supported Robinhood Chain stock-token quote provider is integrated and verified.
+Quote execution must stay wallet-owned. The backend may prepare calldata for verified RH Swap pairs, but signing and broadcasting must remain in the connected wallet.
 
 ## Notes
 

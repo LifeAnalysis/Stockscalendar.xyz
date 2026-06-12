@@ -1,11 +1,12 @@
 import { jsonResponse } from "@/lib/env";
-import { robinhoodChainId, robinhoodExplorer, robinhoodRpcUrl } from "@/lib/robinhood";
+import { robinhoodChainId, robinhoodExplorer, robinhoodRpcUrl, stockQuoteProviderStatus } from "@/lib/robinhood";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
   const openrouterConfigured = Boolean(process.env.OPENROUTER_API_KEY?.trim());
   const rpcConfigured = Boolean(robinhoodRpcUrl());
+  const quoteProvider = stockQuoteProviderStatus();
 
   return jsonResponse({
     ok: true,
@@ -16,8 +17,9 @@ export async function GET() {
       chainId: robinhoodChainId(),
       explorer: robinhoodExplorer(),
       rpc_configured: rpcConfigured,
-      stock_trade_tool: null,
-      quote_provider_configured: false
+      stock_trade_tool: quoteProvider.configured ? quoteProvider.provider : null,
+      quote_provider_configured: quoteProvider.configured,
+      quote_provider: quoteProvider
     },
     data_pipeline: {
       intel_endpoint: "/api/robinhood/intel",

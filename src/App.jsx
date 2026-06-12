@@ -212,62 +212,6 @@ function splitReasoningText(value) {
     .slice(0, 5);
 }
 
-function compactSentence(value, max = 150) {
-  const text = String(value || "").replace(/\s+/g, " ").trim();
-  if (!text) return "";
-  return text.length > max ? `${text.slice(0, max - 1).trim()}...` : text;
-}
-
-function cleanEvidenceLabel(value) {
-  return String(value || "")
-    .replace(/\s*\(GDELT\)\s*/i, "")
-    .replace(/^Public quote$/i, "quote")
-    .replace(/^SEC filing$/i, "SEC")
-    .replace(/^Earnings calendar$/i, "calendar")
-    .replace(/^Kalshi market$/i, "Kalshi")
-    .toLowerCase();
-}
-
-function getSelectedRecommendation(stock, hermesOutput) {
-  return (hermesOutput?.data?.recommendations || []).find((item) => item.symbol === stock?.symbol);
-}
-
-function buildVisibleVoteRows({ stock, decision, recommendation, loading }) {
-  if (loading) return [];
-  const action = decision?.action || recommendation?.action || "WATCH";
-  const confidence = decision?.confidence ?? recommendation?.confidence ?? stock?.score ?? 0;
-  const breakdown = decision?.score_breakdown || recommendation?.score_breakdown || [];
-  const present = breakdown
-    .filter((item) => Number(item.points) > 0)
-    .map((item) => cleanEvidenceLabel(item.label))
-    .filter(Boolean);
-  const missing = breakdown
-    .filter((item) => Number(item.points) <= 0 && Number(item.max) > 0)
-    .map((item) => cleanEvidenceLabel(item.label))
-    .filter(Boolean);
-  const presentText = present.length ? `${present.slice(0, 2).join(" and ")} present` : "No strong support yet";
-  const missingText = missing.length ? `${missing.slice(0, 3).join(", ")} missing` : "no major source gap";
-  const call =
-    action === "BUY"
-      ? "Quote prep can be shown after wallet confirmation."
-      : action === "WATCH"
-        ? "Keep on watch. No signature."
-        : action === "CONFIG_NEEDED"
-          ? "Fix sources before showing a trade call."
-          : "Do not show quote prep yet.";
-
-  return [
-    {
-      label: "Take",
-      value: `${action} at ${confidence}/100. ${presentText}; ${missingText}.`
-    },
-    {
-      label: "Call",
-      value: call
-    }
-  ];
-}
-
 function cleanHermesText(value) {
   return String(value || "")
     .replace(/\*\*/g, "")
@@ -523,7 +467,6 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
   const score = Math.max(0, Math.min(stock.score || 0, 100));
   const decision = hermesOutput?.hermes_decision?.stocks?.find((item) => item.symbol === stock.symbol);
   const llmStockVote = hermesOutput?.llm_vote?.stocks?.find((item) => item.symbol === stock.symbol);
-  const recommendation = getSelectedRecommendation(stock, hermesOutput);
   const [loadingWordIndex, setLoadingWordIndex] = React.useState(0);
 
   React.useEffect(() => {
@@ -555,16 +498,13 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
     })
     .filter((row) => KEEP_EVIDENCE_LABELS.has(row.label.trim().toLowerCase()));
   const stockReplyReason = stockEvidenceRows.map((row) => `${row.label}: ${row.value}`).join("\n");
-  const visibleVoteRows = buildVisibleVoteRows({ stock, decision, recommendation, loading });
   const reasoning =
-    (visibleVoteRows.length ? visibleVoteRows.map((row) => `${row.label}: ${row.value}`).join("\n") : "") ||
     stockReplyReason ||
     llmStockVote?.reason ||
     decision?.reason ||
     (loading ? "Hermes is collecting market, filing, quote, and route evidence before returning a decision." : `${stock.symbol} selected. Contract is ready for Robinhood testnet quote prep.`);
   const reasoningPoints = splitReasoningText(reasoning);
   const nextStep = llmStockVote?.user_action || decision?.user_action;
-  const showNextStep = !visibleVoteRows.length && !loading && nextStep;
 
   return (
     <div className="cn-card score-card">
@@ -639,8 +579,8 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
               <span>{loading ? "Hermes model running" : `${stock.symbol} final vote`}</span>
             </div>
             <div className="reasoning-point-list">
-              {visibleVoteRows.length || stockEvidenceRows.length
-                ? (visibleVoteRows.length ? visibleVoteRows : stockEvidenceRows).map((row) => (
+              {stockEvidenceRows.length
+                ? stockEvidenceRows.map((row) => (
                     <div className={`stock-evidence-row ${row.label.toLowerCase() === "take" ? "stock-evidence-take" : ""}`} key={`${row.label}-${row.value}`}>
                       <span>{row.label}</span>
                       <p>{row.value}</p>
@@ -650,10 +590,10 @@ function HermesOutputBar({ stock, hermesOutput, loading, progress, overlay = tru
                   ? reasoningPoints.map((point) => <p key={point}>{point}</p>)
                   : <p>{reasoning}</p>}
             </div>
-            {showNextStep ? (
+            {!loading && nextStep ? (
               <div className="stock-next-step">
                 <span>Next</span>
-                <p>{compactSentence(nextStep)}</p>
+                <p>{nextStep}</p>
               </div>
             ) : null}
           </div>
@@ -1958,7 +1898,7 @@ function App() {
       return;
     }
     if (!backend.trade) {
-      setTradeError("Quote preparation is disabled until a provider with Robinhood Chain stock-token support is configured.");
+      setTradeError("RH Swap quote preparation is unavailable. Check Robinhood Chain RPC and factory configuration.");
       return;
     }
 
@@ -2015,7 +1955,7 @@ function App() {
     if (isPreparingQuote) return "Preparing quote";
     if (isExecutingQuote || walletPending) return "Waiting for wallet";
     if (quoteTransactions.length) return quoteTransactions.length === 1 ? "Sign swap" : `Sign ${quoteTransactions.length} txs`;
-    if (!backend.trade) return "Quote provider unavailable";
+    if (!backend.trade) return "DEX unavailable";
     return "Prepare quote";
   }
 

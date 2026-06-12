@@ -1,9 +1,12 @@
 import { env, intEnv } from "./env";
 import { fetchJson } from "./http";
+import { decodeFunctionResult, encodeFunctionData, parseUnits, type Abi } from "viem";
 
 export const ROBINHOOD_CHAIN_ID = 46630;
 export const ROBINHOOD_CHAIN_NAME = "Robinhood Chain Testnet";
 export const ROBINHOOD_EXPLORER = "https://explorer.testnet.chain.robinhood.com";
+export const ROBINHOOD_PUBLIC_RPC = "https://rpc.testnet.chain.robinhood.com";
+export const RH_SWAP_FACTORY = "0xE9a696F428725134AB06454A0CB2E7434e3deC4c";
 
 export type RobinhoodToken = {
   symbol: string;
@@ -111,7 +114,7 @@ export const robinhoodStockTokens: RobinhoodToken[] = [
 ];
 
 export function robinhoodRpcUrl(): string {
-  return env("ROBINHOOD_CHAIN_RPC_URL");
+  return env("ROBINHOOD_CHAIN_RPC_URL", env("NEXT_PUBLIC_ROBINHOOD_CHAIN_RPC_URL", ROBINHOOD_PUBLIC_RPC));
 }
 
 export function robinhoodChainId(): number {
@@ -227,6 +230,19 @@ export async function robinhoodStatus() {
   };
 }
 
+export function stockQuoteProviderStatus() {
+  const rpcUrl = robinhoodRpcUrl();
+  const swapFactory = env("ROBINHOOD_SWAP_FACTORY_ADDRESS", RH_SWAP_FACTORY);
+
+  return {
+    configured: Boolean(rpcUrl && swapFactory),
+    provider: rpcUrl && swapFactory ? "rh_swap" : null,
+    needs_configuration: [rpcUrl ? "" : "ROBINHOOD_CHAIN_RPC_URL", swapFactory ? "" : "ROBINHOOD_SWAP_FACTORY_ADDRESS"].filter(Boolean),
+    auth_configured: true,
+    factory: swapFactory
+  };
+}
+
 export type StockTradeInput = {
   action: "buy" | "sell" | "swap" | "rotate";
   source_asset: string;
@@ -242,17 +258,266 @@ function looksAddress(value: string): boolean {
   return /^0x[a-fA-F0-9]{40}$/.test(value || "");
 }
 
-export async function prepareStockTrade(input: StockTradeInput) {
+function buildQuotePayload(input: StockTradeInput) {
   const chainId = robinhoodChainId();
-  const payload = {
-    srcTokenAddress: input.source_asset,
-    destTokenAddress: input.target_asset,
+  return {
+    chainId,
     srcChainId: chainId,
     destChainId: chainId,
+    sourceChainId: chainId,
+    targetChainId: chainId,
+    srcTokenAddress: input.source_asset,
+    destTokenAddress: input.target_asset,
+    source_asset: input.source_asset,
+    target_asset: input.target_asset,
+    fromTokenAddress: input.source_asset,
+    toTokenAddress: input.target_asset,
     userAddress: input.wallet_address,
+    wallet_address: input.wallet_address,
+    takerAddress: input.wallet_address,
     amount: input.amount,
-    slippagePercentage: input.slippagePercentage ?? 0.5
+    sellAmount: input.amount,
+    slippagePercentage: input.slippagePercentage ?? 0.5,
+    action: input.action,
+    strategy: input.strategy || `Hermes Robinhood Chain ${input.action} quote`
   };
+}
+
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const UINT256_MAX = (1n << 256n) - 1n;
+
+const factoryAbi = [
+  {
+    type: "function",
+    name: "getPair",
+    stateMutability: "view",
+    inputs: [{ type: "address", name: "token" }],
+    outputs: [{ type: "address" }]
+  }
+] as const;
+
+const pairAbi = [
+  {
+    type: "function",
+    name: "getReserves",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint256", name: "_reserveEth" }, { type: "uint256", name: "_reserveToken" }]
+  },
+  {
+    type: "function",
+    name: "quoteEthForTokens",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "ethIn" }],
+    outputs: [{ type: "uint256", name: "tokensOut" }]
+  },
+  {
+    type: "function",
+    name: "quoteTokensForEth",
+    stateMutability: "view",
+    inputs: [{ type: "uint256", name: "tokensIn" }],
+    outputs: [{ type: "uint256", name: "ethOut" }]
+  },
+  {
+    type: "function",
+    name: "swapEthForTokens",
+    stateMutability: "payable",
+    inputs: [{ type: "uint256", name: "minTokensOut" }, { type: "address", name: "to" }],
+    outputs: [{ type: "uint256", name: "tokensOut" }]
+  },
+  {
+    type: "function",
+    name: "swapTokensForEth",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "uint256", name: "tokensIn" }, { type: "uint256", name: "minEthOut" }, { type: "address", name: "to" }],
+    outputs: [{ type: "uint256", name: "ethOut" }]
+  }
+] as const;
+
+const erc20Abi = [
+  {
+    type: "function",
+    name: "approve",
+    stateMutability: "nonpayable",
+    inputs: [{ type: "address", name: "spender" }, { type: "uint256", name: "value" }],
+    outputs: [{ type: "bool" }]
+  },
+  {
+    type: "function",
+    name: "decimals",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "uint8" }]
+  }
+] as const;
+
+function sameAddress(left: string, right: string) {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+function isNativePaymentToken(address: string) {
+  return (
+    sameAddress(address, ZERO_ADDRESS) ||
+    robinhoodPaymentTokens.some((token) => token.symbol === "WETH" && sameAddress(token.address, address))
+  );
+}
+
+function findOfficialStock(address: string) {
+  return robinhoodStockTokens.find((stock) => sameAddress(stock.address, address));
+}
+
+async function rpcCall(to: string, data: string) {
+  const response = await fetchJson<{ result?: `0x${string}`; error?: { message?: string } }>(robinhoodRpcUrl(), {
+    method: "POST",
+    body: { jsonrpc: "2.0", id: 1, method: "eth_call", params: [{ to, data }, "latest"] },
+    timeoutMs: intEnv("ROBINHOOD_SWAP_TIMEOUT_MS", 12000)
+  });
+  if (!response.ok || response.data?.error || !response.data?.result) {
+    throw new Error(response.data?.error?.message || response.error || "rpc_call_failed");
+  }
+  return response.data.result;
+}
+
+async function readContract(
+  address: string,
+  abi: Abi,
+  functionName: string,
+  args: readonly unknown[] = []
+) {
+  const data = encodeFunctionData({ abi, functionName, args });
+  const result = await rpcCall(address, data);
+  return decodeFunctionResult({ abi, functionName, data: result });
+}
+
+function applySlippage(value: bigint, slippagePercentage = 0.5) {
+  const bps = Math.max(0, Math.min(5000, Math.round(slippagePercentage * 100)));
+  return (value * BigInt(10_000 - bps)) / 10_000n;
+}
+
+async function tokenDecimals(address: string) {
+  try {
+    return Number(await readContract(address, erc20Abi, "decimals"));
+  } catch {
+    return 18;
+  }
+}
+
+async function prepareRhSwapTrade(input: StockTradeInput) {
+  const sourceIsEth = isNativePaymentToken(input.source_asset);
+  const targetIsEth = isNativePaymentToken(input.target_asset);
+  const buyStock = sourceIsEth ? findOfficialStock(input.target_asset) : undefined;
+  const sellStock = targetIsEth ? findOfficialStock(input.source_asset) : undefined;
+  const stock = buyStock || sellStock;
+
+  if (!stock || sourceIsEth === targetIsEth) {
+    return {
+      ok: false,
+      unsupported: true,
+      provider: "rh_swap",
+      action: input.action,
+      execution_boundary: "quote_preparation_only_wallet_signature_required",
+      message: "RH Swap only supports native ETH against one official stock token per pair.",
+      supported_payment_asset: robinhoodPaymentTokens.find((token) => token.symbol === "WETH")
+    };
+  }
+
+  const factory = env("ROBINHOOD_SWAP_FACTORY_ADDRESS", RH_SWAP_FACTORY);
+  const pair = (await readContract(factory, factoryAbi, "getPair", [stock.address])) as string;
+  if (!pair || sameAddress(pair, ZERO_ADDRESS)) {
+    return {
+      ok: false,
+      provider: "rh_swap",
+      action: input.action,
+      no_pair: true,
+      stock: { symbol: stock.symbol, address: stock.address },
+      factory,
+      execution_boundary: "quote_preparation_only_wallet_signature_required",
+      message: `No RH Swap ETH pair exists for official ${stock.symbol} token ${stock.address}.`
+    };
+  }
+
+  const decimals = await tokenDecimals(stock.address);
+  const amountIn = parseUnits(input.amount, sourceIsEth ? 18 : decimals);
+  const [reserveEth, reserveToken] = (await readContract(pair, pairAbi, "getReserves")) as readonly [bigint, bigint];
+  if (reserveEth <= 0n || reserveToken <= 0n) {
+    return {
+      ok: false,
+      provider: "rh_swap",
+      action: input.action,
+      no_liquidity: true,
+      stock: { symbol: stock.symbol, address: stock.address },
+      pair,
+      reserves: { eth: reserveEth.toString(), token: reserveToken.toString() },
+      execution_boundary: "quote_preparation_only_wallet_signature_required",
+      message: `RH Swap pair for ${stock.symbol} exists but has no executable liquidity.`
+    };
+  }
+
+  if (sourceIsEth) {
+    const tokensOut = (await readContract(pair, pairAbi, "quoteEthForTokens", [amountIn])) as bigint;
+    const minTokensOut = applySlippage(tokensOut, input.slippagePercentage);
+    return {
+      ok: true,
+      provider: "rh_swap",
+      action: "buy",
+      atomic: false,
+      stock: { symbol: stock.symbol, address: stock.address },
+      pair,
+      quote: {
+        input_asset: "ETH",
+        output_asset: stock.symbol,
+        amount_in: amountIn.toString(),
+        amount_out: tokensOut.toString(),
+        min_amount_out: minTokensOut.toString(),
+        reserves: { eth: reserveEth.toString(), token: reserveToken.toString() }
+      },
+      execution_boundary: "quote_preparation_only_wallet_signature_required",
+      message: "RH Swap quote prepared. Wallet signature is required before execution.",
+      transactionRequest: {
+        label: `Swap ETH for ${stock.symbol}`,
+        to: pair,
+        value: amountIn.toString(),
+        data: encodeFunctionData({ abi: pairAbi, functionName: "swapEthForTokens", args: [minTokensOut, input.wallet_address as `0x${string}`] })
+      }
+    };
+  }
+
+  const ethOut = (await readContract(pair, pairAbi, "quoteTokensForEth", [amountIn])) as bigint;
+  const minEthOut = applySlippage(ethOut, input.slippagePercentage);
+  return {
+    ok: true,
+    provider: "rh_swap",
+    action: "sell",
+    atomic: false,
+    stock: { symbol: stock.symbol, address: stock.address },
+    pair,
+    quote: {
+      input_asset: stock.symbol,
+      output_asset: "ETH",
+      amount_in: amountIn.toString(),
+      amount_out: ethOut.toString(),
+      min_amount_out: minEthOut.toString(),
+      reserves: { eth: reserveEth.toString(), token: reserveToken.toString() }
+    },
+    execution_boundary: "quote_preparation_only_wallet_signature_required",
+    message: "RH Swap quote prepared. Approve the token, then sign the swap.",
+    transactions: [
+      {
+        label: `Approve ${stock.symbol}`,
+        to: stock.address,
+        data: encodeFunctionData({ abi: erc20Abi, functionName: "approve", args: [pair as `0x${string}`, UINT256_MAX] })
+      },
+      {
+        label: `Swap ${stock.symbol} for ETH`,
+        to: pair,
+        data: encodeFunctionData({ abi: pairAbi, functionName: "swapTokensForEth", args: [amountIn, minEthOut, input.wallet_address as `0x${string}`] })
+      }
+    ]
+  };
+}
+
+export async function prepareStockTrade(input: StockTradeInput) {
+  const payload = buildQuotePayload(input);
 
   if (!looksAddress(input.source_asset) || !looksAddress(input.target_asset) || !looksAddress(input.wallet_address) || !input.amount) {
     return {
@@ -264,6 +529,24 @@ export async function prepareStockTrade(input: StockTradeInput) {
     };
   }
 
+  const provider = stockQuoteProviderStatus();
+  if (provider.configured) {
+    try {
+      return await prepareRhSwapTrade(input);
+    } catch (error) {
+      return {
+        ok: false,
+        provider: "rh_swap",
+        action: input.action,
+        atomic: false,
+        execution_boundary: "quote_preparation_only_wallet_signature_required",
+        message: "RH Swap quote request failed.",
+        error: error instanceof Error ? error.message : "unknown_error",
+        intended_request: payload
+      };
+    }
+  }
+
   return {
     ok: false,
     unsupported: true,
@@ -272,7 +555,8 @@ export async function prepareStockTrade(input: StockTradeInput) {
     atomic: false,
     strategy: input.strategy || "",
     execution_boundary: "quote_provider_required",
-    message: "Robinhood Chain stock-token quote preparation is disabled because no supported quote provider is configured.",
+    needs_configuration: provider.needs_configuration,
+    message: "RH Swap quote preparation is unavailable because Robinhood Chain RPC or factory configuration is missing.",
     intended_request: payload
   };
 }
