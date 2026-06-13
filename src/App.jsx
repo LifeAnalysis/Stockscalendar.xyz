@@ -1521,6 +1521,7 @@ function App() {
   const [isPreparingQuote, setIsPreparingQuote] = React.useState(false);
   const [isExecutingQuote, setIsExecutingQuote] = React.useState(false);
   const [isLoadingMax, setIsLoadingMax] = React.useState(false);
+  const [sourceBalance, setSourceBalance] = React.useState({ status: "idle", display: "" });
   const [tradeConfirmation, setTradeConfirmation] = React.useState(null);
   const [journalEntries, setJournalEntries] = React.useState([]);
   const [journalExpanded, setJournalExpanded] = React.useState(false);
@@ -1770,6 +1771,63 @@ function App() {
     setTradeStatus("");
     setTradeError("");
   }, [selected, payTokenSymbol, side, amount]);
+
+  React.useEffect(() => {
+    if (!sourceToken) {
+      setSourceBalance({ status: "idle", display: "" });
+      return undefined;
+    }
+    if (!isConnected || !wallet) {
+      setSourceBalance({ status: "idle", display: "Connect wallet" });
+      return undefined;
+    }
+    if (!connectedToRobinhood) {
+      setSourceBalance({ status: "idle", display: "Switch to Robinhood" });
+      return undefined;
+    }
+    if (!publicClient) {
+      setSourceBalance({ status: "loading", display: "Loading balance" });
+      return undefined;
+    }
+
+    let cancelled = false;
+    async function loadSourceBalance() {
+      setSourceBalance({ status: "loading", display: "Loading balance" });
+      try {
+        const usesNativeBalance = side === "buy";
+        const decimals = usesNativeBalance
+          ? 18
+          : Number(await publicClient.readContract({
+              address: sourceToken.address,
+              abi: FRONTEND_ERC20_ABI,
+              functionName: "decimals"
+            }));
+        const rawBalance = usesNativeBalance
+          ? await publicClient.getBalance({ address: wallet })
+          : await publicClient.readContract({
+              address: sourceToken.address,
+              abi: FRONTEND_ERC20_ABI,
+              functionName: "balanceOf",
+              args: [wallet]
+            });
+        if (cancelled) return;
+        const formatted = formatTokenUnits(rawBalance, decimals, 6) || "0";
+        setSourceBalance({ status: "ready", display: `${formatted} ${sourceToken.symbol}` });
+      } catch (error) {
+        if (!cancelled) {
+          setSourceBalance({
+            status: "error",
+            display: `${sourceToken.symbol} balance unavailable`
+          });
+        }
+      }
+    }
+
+    loadSourceBalance();
+    return () => {
+      cancelled = true;
+    };
+  }, [connectedToRobinhood, isConnected, publicClient, side, sourceToken, wallet]);
 
   React.useEffect(() => {
     const cleanAmount = amount.trim();
@@ -2132,6 +2190,10 @@ function App() {
                       <button className="amount-max-button" type="button" onClick={applyMaxAmount} disabled={isLoadingMax || walletPending}>
                         {isLoadingMax ? "..." : "Max"}
                       </button>
+                    </div>
+                    <div className={`asset-balance-line ${sourceBalance.status === "error" ? "error" : ""}`} aria-live="polite">
+                      <span>Balance</span>
+                      <strong>{sourceBalance.display || "-"}</strong>
                     </div>
                   </div>
                 </div>

@@ -589,6 +589,33 @@ select {
   font-weight: 700;
 }
 
+.asset-balance-line {
+  width: 100%;
+  min-height: 16px;
+  display: flex;
+  justify-content: flex-end;
+  gap: 5px;
+  color: #777777;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.asset-balance-line span {
+  font-size: inherit;
+  font-weight: 750;
+}
+
+.asset-balance-line strong {
+  color: #1f1f1f;
+  font-weight: 850;
+}
+
+.asset-balance-line.error strong {
+  color: var(--red);
+}
+
 .amount-entry.readout strong {
   color: #777777;
   font-size: 30px;
