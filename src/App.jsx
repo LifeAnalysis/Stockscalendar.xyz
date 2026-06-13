@@ -20,7 +20,6 @@ const InteractiveStockChart = React.lazy(() =>
 );
 
 const JOURNAL_STORAGE_KEY = "hermes-post-trade-journal";
-const AGENT_STORAGE_KEY = "hermes-agent-chat";
 const HERMES_PROGRESS = {
   boot: { percent: 8, label: "Loading stock desk", detail: "Preparing the Robinhood token catalog." },
   sources: { percent: 28, label: "Checking market context", detail: "Reading supported stocks and route readiness." },
@@ -37,8 +36,6 @@ const CHART_RANGES = [
   { label: "1Y", range: "1y", interval: "1wk" }
 ];
 const SUPPORTED_SWAP_PAYMENT_SYMBOLS = new Set(["WETH"]);
-const AGENT_QUICK_PROMPTS = ["Quant analysis", "Scan news"];
-const AGENT_BOOT_MESSAGE = "I can answer stock questions and prepare wallet-signable transactions.";
 const FRONTEND_ERC20_ABI = [
   {
     type: "function",
@@ -593,6 +590,22 @@ function formatMoney(value) {
   return Number.isFinite(number) ? `$${number.toLocaleString("en-US")}` : String(value);
 }
 
+function formatCompactMoney(value) {
+  if (value === undefined || value === null || value === "") return "n/a";
+  const number = Number(value);
+  return Number.isFinite(number)
+    ? new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", notation: "compact", maximumFractionDigits: 2 }).format(number)
+    : String(value);
+}
+
+function formatSignedNumber(value, suffix = "") {
+  if (value === undefined || value === null || value === "") return "n/a";
+  const number = Number(value);
+  if (!Number.isFinite(number)) return String(value);
+  const sign = number > 0 ? "+" : "";
+  return `${sign}${number.toLocaleString("en-US", { maximumFractionDigits: 2 })}${suffix}`;
+}
+
 function formatConfidence(value) {
   if (value === undefined || value === null || value === "") return "No score";
   const number = Number(value);
@@ -791,6 +804,7 @@ function EarningsBacktestTable({ stock, backtest, loading }) {
   const [expanded, setExpanded] = React.useState(false);
   const rows = backtest?.rows || [];
   const actionLabel = loading ? "In progress" : expanded ? "Collapse" : "Expand";
+  const numberCoverage = rows.filter((row) => row.earnings_numbers?.source_status && row.earnings_numbers.source_status !== "unavailable").length;
   return (
     <section className={`hermes-module earnings-backtest ${expanded ? "expanded" : ""} ${loading ? "loading" : ""}`} aria-label="Hermes backtest">
       <button className="backtest-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
@@ -799,7 +813,7 @@ function EarningsBacktestTable({ stock, backtest, loading }) {
             <MotionAsset src="/media/icons/hermes-output-orb.mp4" webmSrc="/media/icons/hermes-output-orb.webm" className="menu-title-motion" />
             <h3>Hermes Backtest</h3>
           </div>
-          <span>{loading ? "Running" : rows.length ? "Previous 3 earnings" : "No rows yet"}</span>
+          <span>{loading ? "Running" : rows.length ? `Previous 3 earnings · ${numberCoverage}/3 with numbers` : "No rows yet"}</span>
         </div>
         <span className={`expand-action ${loading ? "loading" : ""}`} aria-busy={loading ? "true" : undefined}>
           <span>{actionLabel}</span>
@@ -822,35 +836,67 @@ function EarningsBacktestTable({ stock, backtest, loading }) {
                 <thead>
                   <tr>
                     <th>Date</th>
-                    <th>Move</th>
+                    <th>Earnings numbers</th>
+                    <th>Price reaction</th>
                     <th>Benchmark</th>
-                    <th>Kalshi</th>
+                    <th>Kalshi evidence</th>
+                    <th>News window</th>
                     <th>Hermes read</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {rows.map((row) => (
-                    <tr key={`${row.symbol}-${row.earnings_date}`}>
-                      <td>
-                        <strong>{formatEarningsDate(row.earnings_date)}</strong>
-                        <small>{row.quarter}</small>
-                      </td>
-                      <td>
-                        <strong className={Number(row.move_percent) >= 0 ? "positive" : "negative"}>
-                          {row.move_percent === undefined ? "n/a" : `${row.move_percent}%`}
-                        </strong>
-                        <small>{formatMoney(row.price_before)} → {formatMoney(row.price_after)}</small>
-                      </td>
-                      <td>
-                        <span className={`benchmark-pill ${row.benchmark}`}>{row.benchmark}</span>
-                      </td>
-                      <td>
-                        <strong>{row.kalshi?.matched ? `${row.kalshi.market_count} match${row.kalshi.market_count === 1 ? "" : "es"}` : "No match"}</strong>
-                        <small>{row.kalshi?.top_market?.ticker || "Public feed did not return a usable historic market"}</small>
-                      </td>
-                      <td>{row.analysis}</td>
-                    </tr>
-                  ))}
+                  {rows.map((row) => {
+                    const numbers = row.earnings_numbers || {};
+                    const hasEarningsNumbers = numbers.source_status && numbers.source_status !== "unavailable";
+                    const topHeadlines = row.news?.top_headlines || [];
+                    const kalshiTitle = row.kalshi?.top_market?.title || row.kalshi?.top_market?.ticker;
+                    return (
+                      <tr key={`${row.symbol}-${row.earnings_date}`}>
+                        <td>
+                          <strong>{formatEarningsDate(row.earnings_date)}</strong>
+                          <small>{row.quarter}</small>
+                          {numbers.fiscal_period ? <small>Fiscal {formatEarningsDate(numbers.fiscal_period)}</small> : null}
+                        </td>
+                        <td>
+                          {hasEarningsNumbers ? (
+                            <div className="earnings-number-stack">
+                              <strong>EPS {formatSignedNumber(numbers.eps_actual)}</strong>
+                              <small>Est {formatSignedNumber(numbers.eps_estimate)} · Surprise {formatSignedNumber(numbers.eps_surprise)} / {formatSignedNumber(numbers.eps_surprise_percent, "%")}</small>
+                              <small>Revenue est {formatCompactMoney(numbers.revenue_estimate)}</small>
+                              <span className={`source-chip ${numbers.source_status}`}>{numbers.source_status}</span>
+                            </div>
+                          ) : (
+                            <div className="earnings-number-stack">
+                              <strong>Numbers unavailable</strong>
+                              <small>{numbers.notes?.[0] || "Yahoo earnings history did not return a usable row."}</small>
+                              <span className="source-chip unavailable">unavailable</span>
+                            </div>
+                          )}
+                        </td>
+                        <td>
+                          <strong className={Number(row.move_percent) >= 0 ? "positive" : "negative"}>
+                            {row.move_percent === undefined ? "n/a" : formatSignedNumber(row.move_percent, "%")}
+                          </strong>
+                          <small>{formatMoney(row.price_before)} → {formatMoney(row.price_after)}</small>
+                        </td>
+                        <td>
+                          <span className={`benchmark-pill ${row.benchmark}`}>{row.benchmark}</span>
+                        </td>
+                        <td>
+                          <strong>{row.kalshi?.matched ? `${row.kalshi.market_count} match${row.kalshi.market_count === 1 ? "" : "es"}` : "No match"}</strong>
+                          <small>{kalshiTitle || "Public feed did not return a usable historic market"}</small>
+                          {row.kalshi?.top_market?.yes_bid || row.kalshi?.top_market?.yes_ask ? (
+                            <small>YES {row.kalshi?.top_market?.yes_bid || "n/a"} / {row.kalshi?.top_market?.yes_ask || "n/a"}</small>
+                          ) : null}
+                        </td>
+                        <td>
+                          <strong>{row.news?.article_count || 0} articles</strong>
+                          {topHeadlines.length ? topHeadlines.map((headline) => <small key={headline}>{headline}</small>) : <small>No date-bounded headlines returned</small>}
+                        </td>
+                        <td>{row.analysis}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -1438,73 +1484,6 @@ function EarningsCalendar({ events, stocks, monthDate, onMonthChange, onSelectSt
   );
 }
 
-function HermesAgentPanel({ messages, input, busy, onInputChange, onSend, onQuickPrompt, onAction }) {
-  const [expanded, setExpanded] = React.useState(false);
-
-  return (
-    <section className={`panel agent-panel ${expanded ? "expanded" : ""}`} aria-label="Hermes Agent chat">
-      <button className="agent-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
-        <div className="agent-header">
-          <div>
-            <div className="module-kicker">Hermes Agent</div>
-            <h2>Route Copilot</h2>
-          </div>
-        </div>
-        <span className="expand-action">
-          <span>{expanded ? "Collapse" : "Expand"}</span>
-          {expanded ? <MinusIcon /> : <PlusIcon />}
-        </span>
-      </button>
-      {expanded ? (
-        <>
-          <div className="agent-thread" aria-live="polite">
-            {messages.map((message) => (
-              <article className={`agent-message ${message.role === "user" ? "user" : "assistant"}`} key={message.id}>
-                <div className="agent-message-body">{message.content}</div>
-                {message.warnings?.length ? (
-                  <div className="agent-warnings">
-                    {message.warnings.map((warning) => (
-                      <span key={warning}>{warning}</span>
-                    ))}
-                  </div>
-                ) : null}
-                {message.actions?.length ? (
-                  <div className="agent-actions">
-                    {message.actions.map((action, index) => (
-                      <button key={`${action.type}-${index}`} type="button" onClick={() => onAction(action)}>
-                        {action.label}
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </article>
-            ))}
-          </div>
-          <div className="agent-prompts">
-            {AGENT_QUICK_PROMPTS.map((prompt) => (
-              <button key={prompt} type="button" onClick={() => onQuickPrompt(prompt)} disabled={busy}>
-                {prompt}
-              </button>
-            ))}
-          </div>
-          <form className="agent-input-row" onSubmit={onSend}>
-            <input
-              aria-label="Message Hermes Agent"
-              value={input}
-              placeholder="Ask about route, liquidity, or quote prep"
-              onChange={(event) => onInputChange(event.target.value)}
-              disabled={busy}
-            />
-            <button type="submit" disabled={busy || !input.trim()}>
-              {busy ? "..." : "Send"}
-            </button>
-          </form>
-        </>
-      ) : null}
-    </section>
-  );
-}
-
 function App() {
   const { open } = useAppKit();
   const { address, isConnected } = useAppKitAccount({ namespace: "eip155" });
@@ -1546,15 +1525,6 @@ function App() {
   const [journalEntries, setJournalEntries] = React.useState([]);
   const [journalExpanded, setJournalExpanded] = React.useState(false);
   const [overlayBySymbol, setOverlayBySymbol] = React.useState({});
-  const [agentMessages, setAgentMessages] = React.useState(() => [
-    {
-      id: "agent-boot",
-      role: "assistant",
-      content: AGENT_BOOT_MESSAGE
-    }
-  ]);
-  const [agentInput, setAgentInput] = React.useState("");
-  const [agentBusy, setAgentBusy] = React.useState(false);
 
   const stock = stocks.find((item) => item.symbol === selected);
   const hermesOverlayOn = overlayBySymbol[stock?.symbol] ?? true;
@@ -1845,30 +1815,6 @@ function App() {
     }
   }, [journalEntries]);
 
-  React.useEffect(() => {
-    try {
-      const stored = window.localStorage.getItem(AGENT_STORAGE_KEY);
-      if (stored) {
-        const parsed = JSON.parse(stored);
-        if (Array.isArray(parsed) && parsed.length) {
-          setAgentMessages(parsed.slice(-20).map((message) => (
-            message?.id === "agent-boot" ? { ...message, content: AGENT_BOOT_MESSAGE } : message
-          )));
-        }
-      }
-    } catch (error) {
-      console.warn("Unable to load Hermes Agent chat", error);
-    }
-  }, []);
-
-  React.useEffect(() => {
-    try {
-      window.localStorage.setItem(AGENT_STORAGE_KEY, JSON.stringify(agentMessages.slice(-20)));
-    } catch (error) {
-      console.warn("Unable to save Hermes Agent chat", error);
-    }
-  }, [agentMessages]);
-
   function routePayload() {
     if (!stock || !payToken) return null;
     const isSell = side === "sell";
@@ -1880,22 +1826,6 @@ function App() {
       wallet_address: wallet,
       provider: "auto",
       strategy: `Hermes Robinhood Chain ${side} route for ${stock.symbol}`
-    };
-  }
-
-  function agentContextPayload() {
-    return {
-      selectedSymbol: stock?.symbol,
-      side,
-      amount: amount.trim(),
-      walletAddress: wallet,
-      connected: isConnected,
-      connectedToRobinhood,
-      sourceAsset: sourceToken?.address,
-      targetAsset: targetToken?.address,
-      payTokenSymbol: payToken?.symbol,
-      quoteReady: quoteTransactions.length > 0,
-      backendTradeReady: backend.trade
     };
   }
 
@@ -2066,102 +1996,6 @@ function App() {
     } finally {
       if (quoteRequestRef.current === requestKey) setIsPreparingQuote(false);
     }
-  }
-
-  async function sendAgentMessage(text) {
-    const clean = String(text || "").trim();
-    if (!clean || agentBusy) return;
-    const userMessage = { id: `${Date.now()}-user`, role: "user", content: clean };
-    const history = [...agentMessages, userMessage].slice(-8);
-    setAgentMessages((current) => [...current, userMessage].slice(-20));
-    setAgentInput("");
-    setAgentBusy(true);
-    try {
-      const res = await fetch("/api/hermes/agent", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          message: clean,
-          context: agentContextPayload(),
-          history
-        })
-      });
-      const payload = await readJsonResponse(res);
-      setAgentMessages((current) => [
-        ...current,
-        {
-          id: `${Date.now()}-assistant`,
-          role: "assistant",
-          content: payload?.reply || `Hermes Agent request failed with status ${res.status}.`,
-          actions: payload?.actions || [],
-          warnings: payload?.warnings || [],
-          intent: payload?.intent,
-          replySource: payload?.reply_source
-        }
-      ].slice(-20));
-    } catch (error) {
-      setAgentMessages((current) => [
-        ...current,
-        {
-          id: `${Date.now()}-assistant-error`,
-          role: "assistant",
-          content: `Hermes Agent request failed: ${error.message}`,
-          warnings: ["No transaction was prepared or sent."]
-        }
-      ].slice(-20));
-    } finally {
-      setAgentBusy(false);
-    }
-  }
-
-  async function handleAgentSubmit(event) {
-    event.preventDefault();
-    await sendAgentMessage(agentInput);
-  }
-
-  async function handleAgentAction(action) {
-    if (!action) return;
-    if (action.type === "connect_wallet") {
-      await connectWallet();
-      return;
-    }
-    if (action.type === "switch_network") {
-      await switchToRobinhood();
-      return;
-    }
-    if (action.type === "select_stock" && action.payload?.symbol) {
-      setSelected(String(action.payload.symbol).toUpperCase());
-      setDetailsOpen(true);
-      return;
-    }
-    if (action.type === "set_amount" && action.payload?.amount) {
-      setAmount(String(action.payload.amount));
-      if (action.payload.side === "buy" || action.payload.side === "sell") setSide(action.payload.side);
-      return;
-    }
-    if (action.type === "use_prepared_quote" && action.payload?.quote) {
-      const prepared = action.payload.quote;
-      const transactions = extractTransactionRequests(prepared);
-      setQuote(prepared);
-      setQuoteTransactions(transactions);
-      setTradeStatus(transactions.length ? "" : "Quote loaded without executable wallet transaction.");
-      return;
-    }
-    if (action.type === "prepare_quote") {
-      const payload = routePayload();
-      if (!payload) {
-        setTradeError("Select a stock before preparing a quote.");
-        return;
-      }
-      if (!payload.wallet_address || !payload.amount) {
-        setTradeError("Connect wallet and enter an amount to prepare a quote.");
-        return;
-      }
-      await prepareQuoteFromPayload(payload);
-      return;
-    }
-    const prompt = action.payload?.prompt || `${action.label}${stock?.symbol ? ` for ${stock.symbol}` : ""}`;
-    await sendAgentMessage(prompt);
   }
 
   async function submitTrade(event) {
@@ -2399,7 +2233,10 @@ function App() {
           </form>
 
           <section className="panel stock-section">
-            <div className="stock-section-title">Deep Dive Stocks</div>
+            <div className="stock-section-title">
+              <MotionAsset src="/media/icons/wallet-connect-orb.mp4" webmSrc="/media/icons/wallet-connect-orb.webm" className="menu-title-motion" />
+              <span>Deep Dive Stocks</span>
+            </div>
             <div className="stocks-grid">
               {stocks.map((item) => (
                 <article className={`stock-card ${item.symbol === selected ? "active" : ""}`} key={item.symbol}>
@@ -2418,15 +2255,6 @@ function App() {
               ))}
             </div>
           </section>
-          <HermesAgentPanel
-            messages={agentMessages}
-            input={agentInput}
-            busy={agentBusy}
-            onInputChange={setAgentInput}
-            onSend={handleAgentSubmit}
-            onQuickPrompt={sendAgentMessage}
-            onAction={handleAgentAction}
-          />
           <EarningsCalendar
             events={earningsEvents}
             stocks={stocks}
