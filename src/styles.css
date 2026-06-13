@@ -891,7 +891,7 @@ select {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 10px;
+  min-width: 0;
 }
 
 .agent-header h2 {
@@ -901,18 +901,25 @@ select {
   line-height: 1.05;
 }
 
-.agent-live-dot {
-  width: 10px;
-  height: 10px;
-  margin-top: 4px;
-  border-radius: 50%;
-  background: #ccff00;
-  box-shadow: 0 0 0 3px rgba(204, 255, 0, 0.22);
+.agent-toggle {
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  padding: 0;
+  text-align: left;
 }
 
-.agent-live-dot.thinking {
-  background: #111111;
-  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12);
+.agent-toggle .expand-action {
+  justify-self: end;
+}
+
+.agent-panel.expanded .agent-toggle {
+  margin-bottom: 10px;
 }
 
 .agent-context-row,
@@ -1799,6 +1806,14 @@ select {
   line-height: 1.05;
 }
 
+.module-subtitle {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
 .menu-title-row {
   min-width: 0;
   display: flex;
@@ -2596,6 +2611,7 @@ select {
 }
 
 .provenance-toggle {
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   gap: 8px;

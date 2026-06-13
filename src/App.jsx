@@ -37,7 +37,7 @@ const CHART_RANGES = [
   { label: "1Y", range: "1y", interval: "1wk" }
 ];
 const SUPPORTED_SWAP_PAYMENT_SYMBOLS = new Set(["WETH"]);
-const AGENT_QUICK_PROMPTS = ["Explain route", "Check Hobin liquidity", "Quant analysis", "Scan news"];
+const AGENT_QUICK_PROMPTS = ["Quant analysis", "Scan news"];
 const AGENT_BOOT_MESSAGE = "I can answer stock questions and prepare wallet-signable transactions.";
 const FRONTEND_ERC20_ABI = [
   {
@@ -1027,7 +1027,7 @@ function ConfidenceDecomposition({ stock, hermesOutput, overlay = true, onToggle
     <div data-slot="card" data-size="default" className="cn-card confidence-panel confidence-breakdown-card">
       <div data-slot="card-content" className="cn-card-content confidence-breakdown-content">
         <div className="confidence-breakdown-head">
-          <span className="score-why-label">Evidence score</span>
+          <span className="score-why-label">Confidence score</span>
           <span className="text-3xl font-semibold">
             {total}/100
             {weightsDirty ? <small className="score-why-adjusted">· adjusted</small> : null}
@@ -1132,7 +1132,7 @@ function ConfidenceDecomposition({ stock, hermesOutput, overlay = true, onToggle
         ) : null}
         <div data-orientation="horizontal" role="none" data-slot="separator" className="confidence-separator"></div>
         <div className="confidence-summary">
-          <span className="font-medium">{decision?.action || "Hermes"} confidence factors</span>
+          <span className="font-medium">{titleCaseAction(decision?.action || "Hermes")} confidence factors</span>
           <div className="confidence-summary-grid">
             {segments.map((factor) => (
               <article key={factor.key}>
@@ -1230,7 +1230,7 @@ function DataProvenanceView({ hermesOutput }) {
         <div>
           <div className="menu-title-row">
             <MotionAsset src="/media/icons/hermes-thinking.mp4" webmSrc="/media/icons/hermes-thinking.webm" className="menu-title-motion" />
-            <h3>Data Feed</h3>
+            <h3>Data Sources</h3>
           </div>
         </div>
         <button className="provenance-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
@@ -1439,57 +1439,68 @@ function EarningsCalendar({ events, stocks, monthDate, onMonthChange, onSelectSt
 }
 
 function HermesAgentPanel({ messages, input, busy, onInputChange, onSend, onQuickPrompt, onAction }) {
+  const [expanded, setExpanded] = React.useState(false);
+
   return (
-    <section className="panel agent-panel" aria-label="Hermes Agent chat">
-      <div className="agent-header">
-        <div>
-          <div className="module-kicker">Hermes Agent</div>
-          <h2>Route Copilot</h2>
+    <section className={`panel agent-panel ${expanded ? "expanded" : ""}`} aria-label="Hermes Agent chat">
+      <button className="agent-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+        <div className="agent-header">
+          <div>
+            <div className="module-kicker">Hermes Agent</div>
+            <h2>Route Copilot</h2>
+          </div>
         </div>
-        <span className={`agent-live-dot ${busy ? "thinking" : ""}`} aria-hidden="true" />
-      </div>
-      <div className="agent-thread" aria-live="polite">
-        {messages.map((message) => (
-          <article className={`agent-message ${message.role === "user" ? "user" : "assistant"}`} key={message.id}>
-            <div className="agent-message-body">{message.content}</div>
-            {message.warnings?.length ? (
-              <div className="agent-warnings">
-                {message.warnings.map((warning) => (
-                  <span key={warning}>{warning}</span>
-                ))}
-              </div>
-            ) : null}
-            {message.actions?.length ? (
-              <div className="agent-actions">
-                {message.actions.map((action, index) => (
-                  <button key={`${action.type}-${index}`} type="button" onClick={() => onAction(action)}>
-                    {action.label}
-                  </button>
-                ))}
-              </div>
-            ) : null}
-          </article>
-        ))}
-      </div>
-      <div className="agent-prompts">
-        {AGENT_QUICK_PROMPTS.map((prompt) => (
-          <button key={prompt} type="button" onClick={() => onQuickPrompt(prompt)} disabled={busy}>
-            {prompt}
-          </button>
-        ))}
-      </div>
-      <form className="agent-input-row" onSubmit={onSend}>
-        <input
-          aria-label="Message Hermes Agent"
-          value={input}
-          placeholder="Ask about route, liquidity, or quote prep"
-          onChange={(event) => onInputChange(event.target.value)}
-          disabled={busy}
-        />
-        <button type="submit" disabled={busy || !input.trim()}>
-          {busy ? "..." : "Send"}
-        </button>
-      </form>
+        <span className="expand-action">
+          <span>{expanded ? "Collapse" : "Expand"}</span>
+          {expanded ? <MinusIcon /> : <PlusIcon />}
+        </span>
+      </button>
+      {expanded ? (
+        <>
+          <div className="agent-thread" aria-live="polite">
+            {messages.map((message) => (
+              <article className={`agent-message ${message.role === "user" ? "user" : "assistant"}`} key={message.id}>
+                <div className="agent-message-body">{message.content}</div>
+                {message.warnings?.length ? (
+                  <div className="agent-warnings">
+                    {message.warnings.map((warning) => (
+                      <span key={warning}>{warning}</span>
+                    ))}
+                  </div>
+                ) : null}
+                {message.actions?.length ? (
+                  <div className="agent-actions">
+                    {message.actions.map((action, index) => (
+                      <button key={`${action.type}-${index}`} type="button" onClick={() => onAction(action)}>
+                        {action.label}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </article>
+            ))}
+          </div>
+          <div className="agent-prompts">
+            {AGENT_QUICK_PROMPTS.map((prompt) => (
+              <button key={prompt} type="button" onClick={() => onQuickPrompt(prompt)} disabled={busy}>
+                {prompt}
+              </button>
+            ))}
+          </div>
+          <form className="agent-input-row" onSubmit={onSend}>
+            <input
+              aria-label="Message Hermes Agent"
+              value={input}
+              placeholder="Ask about route, liquidity, or quote prep"
+              onChange={(event) => onInputChange(event.target.value)}
+              disabled={busy}
+            />
+            <button type="submit" disabled={busy || !input.trim()}>
+              {busy ? "..." : "Send"}
+            </button>
+          </form>
+        </>
+      ) : null}
     </section>
   );
 }

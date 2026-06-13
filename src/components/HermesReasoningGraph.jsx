@@ -491,7 +491,8 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
     <section className="hermes-module reasoning-graph-module" aria-label="Hermes evidence graph">
       <div className="module-head reasoning-graph-head">
         <div>
-          <h3>Hermes Evidence Map</h3>
+          <h3>Hermese Confidence MAP</h3>
+          <p className="module-subtitle">Source data visualized</p>
         </div>
         <button className="graph-reset-button" type="button" onClick={resetGraph}>
           <RotateCcwIcon />
