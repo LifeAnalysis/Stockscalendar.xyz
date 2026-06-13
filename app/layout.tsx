@@ -7,7 +7,7 @@ export const metadata: Metadata = {
   title: "stockscalendar",
   description: "Kalshi and market-intelligence command center for Robinhood Chain stock tokens",
   icons: {
-    icon: [{ url: "/media/icons/hermes-thinking.webm", type: "video/webm" }]
+    icon: [{ url: "/favicon.png", type: "image/png" }]
   }
 };
 

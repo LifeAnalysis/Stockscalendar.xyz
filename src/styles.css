@@ -258,10 +258,10 @@ p {
 
 .stock-section-title {
   color: var(--foreground);
-  font-size: 13px;
-  font-weight: 900;
-  line-height: 1;
-  text-transform: uppercase;
+  font-size: 20px;
+  font-weight: 950;
+  line-height: 1.05;
+  text-transform: none;
 }
 
 .hermes-data-section {
@@ -1094,7 +1094,7 @@ select {
 
 .stocks-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(72px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
@@ -1135,8 +1135,8 @@ select {
 }
 
 .stock-card .logo {
-  width: 34px;
-  height: 34px;
+  width: 28px;
+  height: 28px;
   border: 0;
   border-radius: 0;
   padding: 1px;
@@ -1154,6 +1154,9 @@ select {
 
 .stock-card .ticker {
   justify-self: end;
+  font-size: 14px;
+  font-weight: 750;
+  line-height: 1;
   text-align: right;
 }
 
@@ -1259,7 +1262,7 @@ select {
 .interactive-chart-frame,
 .interactive-chart-container {
   width: 100%;
-  height: 190px;
+  height: 230px;
   overflow: hidden;
 }
 
@@ -1359,9 +1362,9 @@ select {
 
 .score-card .cn-card-content {
   display: grid;
-  gap: 8px;
+  gap: 6px;
   min-height: 0;
-  padding: 10px 14px 12px;
+  padding: 8px 14px;
 }
 
 .score-head {
@@ -1374,10 +1377,12 @@ select {
 
 .score-left {
   display: grid;
+  grid-template-columns: minmax(110px, auto) minmax(180px, 250px);
   width: 100%;
-  align-content: start;
+  align-items: center;
+  justify-content: center;
   justify-items: center;
-  gap: 6px;
+  gap: 18px;
   padding-top: 0;
   min-width: 0;
 }
@@ -1390,6 +1395,7 @@ select {
 }
 
 .score-copy {
+  order: 1;
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -1445,8 +1451,9 @@ select {
 
 .score-radial {
   --primary: #ccff00;
-  width: min(100%, 380px);
-  height: 190px;
+  order: 2;
+  width: min(100%, 250px);
+  height: 138px;
   flex: 0 0 auto;
   overflow: hidden;
   color: var(--foreground);
@@ -1459,7 +1466,7 @@ select {
 
 .score-radial-value {
   fill: var(--card-foreground);
-  font-size: 34px;
+  font-size: 32px;
   font-weight: 950;
 }
 
@@ -2553,7 +2560,7 @@ select {
 
 .market-row dd {
   margin: 3px 0 0;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 400;
   overflow-wrap: anywhere;
 }
@@ -2681,7 +2688,7 @@ select {
 
 .chart-fallback {
   width: 100%;
-  height: 190px;
+  height: 230px;
 }
 
 .chart-state {
@@ -3546,7 +3553,7 @@ select {
   position: relative;
   z-index: 1;
   width: min(1440px, calc(100% - 44px));
-  margin: 18px auto 28px;
+  margin: 34px auto 28px;
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
@@ -3664,6 +3671,15 @@ select {
   font-weight: 900;
   text-transform: uppercase;
   letter-spacing: 0.02em;
+}
+
+.confidence-breakdown-head .score-why-label {
+  font-family: Helvetica, Arial, sans-serif;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0;
+  text-transform: none;
 }
 
 .score-why-sentence {
@@ -3978,7 +3994,7 @@ select {
   .stocks-grid {
     width: 100%;
     min-width: 0;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 5px;
   }
 
@@ -3996,12 +4012,12 @@ select {
   }
 
   .stock-card .logo {
-    width: 26px;
-    height: 26px;
+    width: 24px;
+    height: 24px;
   }
 
   .stock-card .ticker {
-    font-size: 10px;
+    font-size: 12px;
     line-height: 1;
   }
 
@@ -4043,8 +4059,8 @@ select {
   }
 
   .score-radial {
-    width: min(100%, 380px);
-    height: 190px;
+    width: min(100%, 250px);
+    height: 138px;
     flex-basis: auto;
   }
 

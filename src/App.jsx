@@ -195,16 +195,6 @@ function GithubIcon() {
   );
 }
 
-function SparklesIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M9.9 2.6 8.7 7.1 4.2 8.3l4.5 1.2 1.2 4.5 1.2-4.5 4.5-1.2-4.5-1.2-1.2-4.5Z"></path>
-      <path d="M17.6 11.7 16.9 14l-2.3.7 2.3.7.7 2.3.7-2.3 2.3-.7-2.3-.7-.7-2.3Z"></path>
-      <path d="M6.2 16.8 5.8 18l-1.2.4 1.2.4.4 1.2.4-1.2 1.2-.4-1.2-.4-.4-1.2Z"></path>
-    </svg>
-  );
-}
-
 function MotionAsset({ src, webmSrc, className }) {
   return (
     <video
@@ -1256,20 +1246,24 @@ function previewHermesOutput(intel) {
 }
 
 function PostTradeJournal({ entries, stock }) {
+  const [expanded, setExpanded] = React.useState(false);
   const visibleEntries = entries
     .filter((entry) => entry.status === "tx_confirmed")
     .filter((entry) => !stock || entry.symbol === stock.symbol)
     .slice(0, 6);
 
   return (
-    <section className="hermes-module journal-view" aria-label="Post-trade journal">
+    <section className={`hermes-module journal-view ${expanded ? "expanded" : ""}`} aria-label="Trade journal">
       <div className="module-head">
         <div>
-          <div className="module-kicker">Post-trade journal</div>
-          <h3>{visibleEntries.length} event(s)</h3>
+          <h3>Trade Journal</h3>
         </div>
+        <button className="provenance-toggle" type="button" aria-expanded={expanded} onClick={() => setExpanded((current) => !current)}>
+          <span>{expanded ? "Collapse" : "Expand"}</span>
+          {expanded ? <MinusIcon /> : <PlusIcon />}
+        </button>
       </div>
-      {visibleEntries.length ? (
+      {expanded && visibleEntries.length ? (
         <div className="journal-stack">
           {visibleEntries.map((entry) => {
             const sideLabel = entry.side?.toUpperCase() || "TRADE";
@@ -1298,9 +1292,9 @@ function PostTradeJournal({ entries, stock }) {
             );
           })}
         </div>
-      ) : (
+      ) : expanded ? (
         <p className="empty-module-note">Confirmed wallet transactions will appear here with the Hermes evidence snapshot.</p>
-      )}
+      ) : null}
     </section>
   );
 }
@@ -1425,7 +1419,7 @@ function HermesAgentPanel({ messages, input, busy, onInputChange, onSend, onQuic
       <div className="agent-header">
         <div>
           <div className="module-kicker">Hermes Agent</div>
-          <h2>Route copilot</h2>
+          <h2>Route Copilot</h2>
         </div>
         <span className={`agent-live-dot ${busy ? "thinking" : ""}`} aria-hidden="true" />
       </div>
@@ -2168,7 +2162,7 @@ function App() {
     if (isPreparingQuote) return "Preparing quote";
     if (isLoadingMax) return "Reading balance";
     if (isExecutingQuote || walletPending) return "Waiting for wallet";
-    if (quoteTransactions.length) return quoteTransactions.length === 1 ? "Sign swap" : `Sign ${quoteTransactions.length} txs`;
+    if (quoteTransactions.length) return quoteTransactions.length === 1 ? "Swap" : `Swap ${quoteTransactions.length} txs`;
     if (!backend.trade) return "DEX unavailable";
     if (!amount.trim()) return "Enter amount";
     if (tradeError) return "Retry quote";
@@ -2253,7 +2247,6 @@ function App() {
                         {isLoadingMax ? "..." : "Max"}
                       </button>
                     </div>
-                    <span>{sourceToken?.symbol ? `${sourceToken.symbol} amount` : "Token amount"}</span>
                   </div>
                 </div>
 
@@ -2353,16 +2346,6 @@ function App() {
             </div>
           </form>
 
-          <HermesAgentPanel
-            messages={agentMessages}
-            input={agentInput}
-            busy={agentBusy}
-            onInputChange={setAgentInput}
-            onSend={handleAgentSubmit}
-            onQuickPrompt={sendAgentMessage}
-            onAction={handleAgentAction}
-          />
-
           <section className="panel stock-section">
             <div className="stock-section-title">Deep Dive Stocks</div>
             <div className="stocks-grid">
@@ -2383,6 +2366,15 @@ function App() {
               ))}
             </div>
           </section>
+          <HermesAgentPanel
+            messages={agentMessages}
+            input={agentInput}
+            busy={agentBusy}
+            onInputChange={setAgentInput}
+            onSend={handleAgentSubmit}
+            onQuickPrompt={sendAgentMessage}
+            onAction={handleAgentAction}
+          />
           <EarningsCalendar
             events={earningsEvents}
             stocks={stocks}
@@ -2455,11 +2447,9 @@ function App() {
           <span>Built by LifeAnalysis</span>
         </a>
         <span>
-          <SparklesIcon />
           Built using Hermes, custom model, Robinhood Chain, and Kalshi data feed
         </span>
         <a href="https://twitter.com/kuerax" target="_blank" rel="noreferrer">
-          <SparklesIcon />
           <span>@kuerax on Twitter</span>
         </a>
       </footer>
