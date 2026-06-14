@@ -436,9 +436,9 @@ async function askHermesComparison(
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(10000, Math.trunc(timeoutMs)) : 90000,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://hermes-agent-backend.vercel.app",
-      "X-OpenRouter-Title": "Hermes Robinhood Chain",
-      "X-Title": "Hermes Robinhood Chain"
+      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockcalendar.xyz"),
+      "X-OpenRouter-Title": "StockCalendar.xyz",
+      "X-Title": "StockCalendar.xyz"
     },
     body: {
       model,
@@ -735,9 +735,9 @@ async function askHermes(message: string, intel: StockIntel): Promise<OpenRouter
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(10000, Math.trunc(timeoutMs)) : 90000,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": "https://hermes-agent-backend.vercel.app",
-      "X-OpenRouter-Title": "Hermes Robinhood Chain",
-      "X-Title": "Hermes Robinhood Chain"
+      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockcalendar.xyz"),
+      "X-OpenRouter-Title": "StockCalendar.xyz",
+      "X-Title": "StockCalendar.xyz"
     },
     body: {
       model,

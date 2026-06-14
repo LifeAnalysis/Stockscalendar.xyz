@@ -1,13 +1,30 @@
-# Hermes Robinhood Chain
+# StockCalendar.xyz
 
-Hermes Robinhood Chain is a Next.js research command center for Robinhood Chain testnet stock tokens. It combines official testnet token contracts with public market context, Kalshi prediction-market data, SEC filings, GDELT news, earnings calendars, historical chart data, and an OpenRouter-powered Hermes summary layer.
+StockCalendar.xyz - Discover and trade Robinhood Chain stocks, powered by the Hermes research agent.
 
-The product is intentionally research-first. It can prepare unsigned Hobin DEX transaction requests for wallet execution against Robinhood Chain testnet stock-token pools, but it never signs or submits trades server-side.
+StockCalendar.xyz turns the Robinhood Chain stock-token market into something a normal investor can actually navigate. A user who wants to buy tokenized `TSLA` or `AMZN` on-chain should not have to trade blind, without earnings context, prediction-market reads, filings checks, price context, or source provenance. StockCalendar.xyz uses Hermes to gather, score, and explain the evidence behind every supported stock while leaving execution fully in the user's hands.
+
+Hermes is a genuine research agent, not a chatbot wrapper. It runs a deterministic, multi-source evidence pipeline for each supported Robinhood Chain stock - `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD` - and fuses signals across official contract confirmation, explorer context, Kalshi YES/NO pricing and liquidity, live quote snapshots, earnings calendars and backtests, SEC EDGAR filings, and recent news pressure.
+
+The result is a transparent verdict: `BUY`, `WATCH`, `NO_BUY`, or `CONFIG_NEEDED`. Each verdict includes a confidence breakdown, reasoning graph, and full data-source provenance so the user can see exactly why the agent reached that conclusion. An optional model layer adds a concise natural-language final vote, but it is hard-guardrailed: it can never upgrade weak deterministic evidence into a buy.
+
+## Why It Exists
+
+Tokenized equities are arriving on-chain faster than the tools to understand them. Robinhood Chain needs a discovery and confidence layer, or its stock tokens stay illiquid and intimidating.
+
+StockCalendar.xyz is that layer: a Bloomberg-terminal-meets-agent front door for on-chain equities. It is designed around the same responsible pattern throughout the app: discover and explain first, sign last.
+
+## Current Product Surface
+
+The app is a two-column trading desk:
+
+- **Left side:** buy/sell ticket, supported stock strip, earnings calendar, and stock selection.
+- **Right side:** selected-stock research panel with chart ranges, Hermes output, confidence breakdown, reasoning graph, earnings backtest, prediction-market overlay, data provenance, and local journal.
 
 ## What It Does
 
 - Shows the supported Robinhood Chain stock universe: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`.
-- Keeps the classic DEX-style buy/sell ticket visible while separating quote readiness, pair availability, and wallet execution.
+- Keeps the DEX-style buy/sell ticket visible while separating quote readiness, pair availability, and wallet execution.
 - Loads Hermes intelligence progressively so the UI is usable before slower model output finishes.
 - Explains why Hermes does or does not support a stock route.
 - Breaks down confidence into the same evidence categories used by the backend scoring model.
@@ -16,16 +33,9 @@ The product is intentionally research-first. It can prepare unsigned Hobin DEX t
 - Records a local post-trade/quote journal when quote events or transaction hashes exist.
 - Uses optimized motion-icon assets under `public/media/icons` with originals preserved under `assets/originals`.
 
-## Current Product Surface
+## Hermes Panels
 
-The main app is a two-column stock desk:
-
-- **Left side:** buy/sell ticket, supported stock strip, earnings calendar, and stock selection.
-- **Right side:** selected-stock research panel with chart ranges, Hermes output, confidence breakdown, reasoning graph, earnings backtest, prediction-market overlay, data provenance, and local journal.
-
-### Hermes Panels
-
-- **Hermes output:** OpenRouter final vote plus user-facing textual output, with deterministic fallback only when the model is unavailable.
+- **Hermes output:** OpenRouter final vote plus user-facing textual output, with deterministic fallback when the model is unavailable.
 - **Why this route?:** selected source/target token route, wallet/network/quote state, and key evidence chips.
 - **Confidence decomposition:** point-by-point confidence contribution from Kalshi market quality, earnings, quote data, SEC, news, and market breadth, with route/explorer shown separately as readiness checks.
 - **Reasoning graph:** visual evidence graph linking route, public sources, market context, and Hermes decision.
@@ -36,14 +46,19 @@ The main app is a two-column stock desk:
 
 ## Execution Boundary
 
+The architecture is contract-address-first and safety-first by design. Hermes only routes official Robinhood Chain stock-token and payment-token contracts; explorer-discovered third-party and mock tokens are surfaced as context but never treated as executable.
+
 Robinhood Chain stock-token quote preparation uses Hobin testnet contracts, with RH Swap kept as a fallback discovery surface:
 
-- `/api/robinhood/trade` validates exact token addresses and prepares wallet-signable transaction data only.
+- `/api/robinhood/trade` validates exact `0x` token addresses and prepares wallet-signable transaction data only.
+- The endpoint validates the correct chain ID, base-unit amounts, and official contract addresses; symbols are rejected for executable quote requests.
 - The primary integrated DEX is Hobin: factory `0xdD427A5AdF55C1ad4e82E6Af8C0Baaab0A2b5515`, router `0xF957Cb7a67180bf70Ca46C7c88F6c2b3Cb9c33B4`.
 - Hobin has WETH pairs for the supported official stock tokens: `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD`.
 - RH Swap's testnet `MockSwapFactory` at `0xE9a696F428725134AB06454A0CB2E7434e3deC4c` is still recognized, but its official stock-token pairs were not liquid at integration time.
 - If a stock token has no pair or no liquidity, the endpoint returns an explicit `no_pair` or `no_liquidity` response.
 - Nuvolari integration is not used because Nuvolari does not support Robinhood Chain stock tokens.
+
+Hermes never signs for the user. It prepares wallet-signable, properly formed quote payloads; the signing boundary stays with the wallet owner through Reown AppKit and Wagmi.
 
 ## Data Sources
 
@@ -127,7 +142,7 @@ YAHOO_CHART_TIMEOUT_MS=6000
 YAHOO_CHART_RANGE=3mo
 YAHOO_CHART_INTERVAL=1d
 SEC_TIMEOUT_MS=8000
-SEC_USER_AGENT=hermes-agent-backend/2.0 your-email@example.com
+SEC_USER_AGENT=stockcalendar-xyz/2.0 your-email@example.com
 GDELT_TIMEOUT_MS=6000
 GDELT_MAX_RECORDS=25
 YAHOO_NEWS_TIMEOUT_MS=6000
@@ -144,7 +159,7 @@ ROBINHOOD_SWAP_FACTORY_ADDRESS=0xE9a696F428725134AB06454A0CB2E7434e3deC4c
 ROBINHOOD_SWAP_TIMEOUT_MS=12000
 
 # Browser wallet config.
-NEXT_PUBLIC_SITE_URL=
+NEXT_PUBLIC_SITE_URL=https://stockcalendar.xyz
 NEXT_PUBLIC_REOWN_PROJECT_ID=
 NEXT_PUBLIC_ROBINHOOD_CHAIN_RPC_URL=https://rpc.testnet.chain.robinhood.com
 NEXT_PUBLIC_ROBINHOOD_CHAIN_ID=46630

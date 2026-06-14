@@ -226,8 +226,8 @@ async function analyzeWithOpenRouter(stock: RobinhoodToken, rows: Omit<EarningsB
     timeoutMs: Number(env("OPENROUTER_TIMEOUT_MS", "45000")) || 45000,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://hermes-agent-backend-production.up.railway.app"),
-      "X-Title": "Hermes Earnings Backtest"
+      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockcalendar.xyz"),
+      "X-Title": "StockCalendar.xyz Earnings Backtest"
     },
     body: {
       model: env("OPENROUTER_MODEL", "deepseek/deepseek-v4-flash"),
@@ -376,4 +376,3 @@ export async function buildEarningsBacktest(symbol: string, options: { refresh?:
     rows
   };
 }
-

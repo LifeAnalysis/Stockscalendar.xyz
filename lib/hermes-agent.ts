@@ -392,8 +392,8 @@ async function callOpenRouterAgent(input: {
     method: "POST",
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://hermes-agent-backend.vercel.app"),
-      "X-Title": "Hermes Robinhood Chain"
+      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockcalendar.xyz"),
+      "X-Title": "StockCalendar.xyz"
     },
     timeoutMs: Number(env("OPENROUTER_TIMEOUT_MS", "90000")),
     body: {

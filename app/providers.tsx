@@ -22,9 +22,9 @@ createAppKit({
   networks,
   defaultNetwork: robinhoodChain,
   metadata: {
-    name: "stockscalendar",
-    description: "Robinhood Chain stock-token swap command center",
-    url: process.env.NEXT_PUBLIC_SITE_URL || "https://hermes-robinhood-chain.vercel.app",
+    name: "StockCalendar.xyz",
+    description: "Discover and trade Robinhood Chain stocks, powered by the Hermes research agent.",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://stockcalendar.xyz",
     icons: ["/media/icons/hermes-thinking.webm"]
   },
   features: {
