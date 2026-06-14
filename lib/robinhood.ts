@@ -287,7 +287,7 @@ function buildQuotePayload(input: StockTradeInput) {
     sellAmount: input.amount,
     slippagePercentage: input.slippagePercentage ?? 0.5,
     action: input.action,
-    strategy: input.strategy || `StockCalendar.xyz ${input.action} quote`
+    strategy: input.strategy || `Stockscalendar.xyz ${input.action} quote`
   };
 }
 

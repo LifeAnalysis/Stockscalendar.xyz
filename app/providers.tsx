@@ -22,9 +22,9 @@ createAppKit({
   networks,
   defaultNetwork: robinhoodChain,
   metadata: {
-    name: "StockCalendar.xyz",
+    name: "Stockscalendar.xyz",
     description: "Discover and trade Robinhood Chain stocks, powered by the Hermes research agent.",
-    url: process.env.NEXT_PUBLIC_SITE_URL || "https://stockcalendar.xyz",
+    url: process.env.NEXT_PUBLIC_SITE_URL || "https://stockscalendar.xyz",
     icons: ["/media/icons/hermes-thinking.webm"]
   },
   features: {

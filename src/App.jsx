@@ -1829,7 +1829,7 @@ function App() {
       amount: cleanAmount,
       wallet_address: wallet,
       provider: "auto",
-      strategy: `StockCalendar.xyz ${side} route for ${stock.symbol}`
+      strategy: `Stockscalendar.xyz ${side} route for ${stock.symbol}`
     };
     const requestKey = JSON.stringify(payload);
     const timer = window.setTimeout(() => {
@@ -1870,7 +1870,7 @@ function App() {
       amount: amount.trim(),
       wallet_address: wallet,
       provider: "auto",
-      strategy: `StockCalendar.xyz ${side} route for ${stock.symbol}`
+      strategy: `Stockscalendar.xyz ${side} route for ${stock.symbol}`
     };
   }
 

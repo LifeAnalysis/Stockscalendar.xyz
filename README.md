@@ -1,8 +1,8 @@
-# StockCalendar.xyz
+# Stockscalendar.xyz
 
-StockCalendar.xyz - Discover and trade Robinhood Chain stocks, powered by the Hermes research agent.
+Stockscalendar.xyz - Discover and trade Robinhood Chain stocks, powered by the Hermes research agent.
 
-StockCalendar.xyz turns the Robinhood Chain stock-token market into something a normal investor can actually navigate. A user who wants to buy tokenized `TSLA` or `AMZN` on-chain should not have to trade blind, without earnings context, prediction-market reads, filings checks, price context, or source provenance. StockCalendar.xyz uses Hermes to gather, score, and explain the evidence behind every supported stock while leaving execution fully in the user's hands.
+Stockscalendar.xyz turns the Robinhood Chain stock-token market into something a normal investor can actually navigate. A user who wants to buy tokenized `TSLA` or `AMZN` on-chain should not have to trade blind, without earnings context, prediction-market reads, filings checks, price context, or source provenance. Stockscalendar.xyz uses Hermes to gather, score, and explain the evidence behind every supported stock while leaving execution fully in the user's hands.
 
 Hermes is a genuine research agent, not a chatbot wrapper. It runs a deterministic, multi-source evidence pipeline for each supported Robinhood Chain stock - `TSLA`, `AMZN`, `PLTR`, `NFLX`, and `AMD` - and fuses signals across official contract confirmation, explorer context, Kalshi YES/NO pricing and liquidity, live quote snapshots, earnings calendars and backtests, SEC EDGAR filings, and recent news pressure.
 
@@ -12,7 +12,7 @@ The result is a transparent verdict: `BUY`, `WATCH`, `NO_BUY`, or `CONFIG_NEEDED
 
 Tokenized equities are arriving on-chain faster than the tools to understand them. Robinhood Chain needs a discovery and confidence layer, or its stock tokens stay illiquid and intimidating.
 
-StockCalendar.xyz is that layer: a Bloomberg-terminal-meets-agent front door for on-chain equities. It is designed around the same responsible pattern throughout the app: discover and explain first, sign last.
+Stockscalendar.xyz is that layer: a Bloomberg-terminal-meets-agent front door for on-chain equities. It is designed around the same responsible pattern throughout the app: discover and explain first, sign last.
 
 ## Current Product Surface
 

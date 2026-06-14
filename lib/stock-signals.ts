@@ -304,7 +304,7 @@ export async function fetchYahooChart(
 }
 
 function secUserAgent(): string {
-  return env("SEC_USER_AGENT", "stockcalendar-xyz/2.0 contact@lifeanalysis.local");
+  return env("SEC_USER_AGENT", "stockscalendar-xyz/2.0 contact@lifeanalysis.local");
 }
 
 function secDocumentUrl(cik: string, accessionNumber?: string, document?: string): string | undefined {

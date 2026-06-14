@@ -436,9 +436,9 @@ async function askHermesComparison(
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(10000, Math.trunc(timeoutMs)) : 90000,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockcalendar.xyz"),
-      "X-OpenRouter-Title": "StockCalendar.xyz",
-      "X-Title": "StockCalendar.xyz"
+      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockscalendar.xyz"),
+      "X-OpenRouter-Title": "Stockscalendar.xyz",
+      "X-Title": "Stockscalendar.xyz"
     },
     body: {
       model,
@@ -735,9 +735,9 @@ async function askHermes(message: string, intel: StockIntel): Promise<OpenRouter
     timeoutMs: Number.isFinite(timeoutMs) ? Math.max(10000, Math.trunc(timeoutMs)) : 90000,
     headers: {
       Authorization: `Bearer ${apiKey}`,
-      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockcalendar.xyz"),
-      "X-OpenRouter-Title": "StockCalendar.xyz",
-      "X-Title": "StockCalendar.xyz"
+      "HTTP-Referer": env("NEXT_PUBLIC_SITE_URL", "https://stockscalendar.xyz"),
+      "X-OpenRouter-Title": "Stockscalendar.xyz",
+      "X-Title": "Stockscalendar.xyz"
     },
     body: {
       model,

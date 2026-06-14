@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import Providers from "./providers";
 
 export const metadata: Metadata = {
-  title: "StockCalendar.xyz",
+  title: "Stockscalendar.xyz",
   description: "Discover and trade Robinhood Chain stocks, powered by the Hermes research agent.",
   icons: {
     icon: [{ url: "/favicon.png", type: "image/png" }]
