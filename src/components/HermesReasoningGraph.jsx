@@ -173,6 +173,7 @@ function positionGraphNodes(nodes) {
 }
 
 function layoutGraphInViewport(cy) {
+  if (!cy || cy.destroyed?.()) return;
   const nodes = cy.nodes();
   if (!nodes.length) return;
 
@@ -447,7 +448,11 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
       }
     });
 
+    let disposed = false;
+    let resizeFrame = null;
+
     const centerGraph = () => {
+      if (disposed || cy.destroyed?.()) return;
       cy.resize();
       layoutGraphInViewport(cy);
     };
@@ -471,11 +476,18 @@ export function HermesReasoningGraph({ stock, hermesOutput, loading }) {
     });
 
     const resizeObserver =
-      typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => window.requestAnimationFrame(centerGraph)) : null;
+      typeof ResizeObserver !== "undefined"
+        ? new ResizeObserver(() => {
+            if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
+            resizeFrame = window.requestAnimationFrame(centerGraph);
+          })
+        : null;
     if (resizeObserver) resizeObserver.observe(containerRef.current);
 
     cyRef.current = cy;
     return () => {
+      disposed = true;
+      if (resizeFrame) window.cancelAnimationFrame(resizeFrame);
       if (resizeObserver) resizeObserver.disconnect();
       cy.destroy();
       cyRef.current = null;

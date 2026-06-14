@@ -48,6 +48,7 @@ import {
   isReownConfigured,
   robinhoodChain
 } from "./web3/config";
+import { earningsEvents } from "./earningsData.js";
 
 const Dither = React.lazy(() => import("./Dither.jsx"));
 const JOURNAL_STORAGE_KEY = "hermes-post-trade-journal";
